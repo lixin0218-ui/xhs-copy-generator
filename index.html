@@ -15,7 +15,7 @@
       <span class="logo">红</span>
       <div>
         <h1>小红书文案批量生成器</h1>
-        <p class="sub">标题 · 正文 · 互动引导 · 话题标签，一次生成多篇</p>
+        <p class="sub">标题 · 正文 · 话题标签 · 封面图 · 配图建议，一次生成多篇</p>
       </div>
     </div>
     <nav class="top-actions">
@@ -24,11 +24,30 @@
     </nav>
   </header>
 
-  <main class="layout">
+  <nav class="tabs" id="tabs" aria-label="功能分区">
+    <button type="button" class="tab active" data-tab="gen"><span>✍️</span>生成</button>
+    <button type="button" class="tab" data-tab="tools"><span>🛠</span>工具</button>
+    <button type="button" class="tab" data-tab="library"><span>📚</span>资料库</button>
+    <button type="button" class="tab" data-tab="calendar"><span>🗓</span>日历</button>
+    <button type="button" class="tab" data-tab="data"><span>📊</span>数据</button>
+  </nav>
+
+  <main class="layout panel" data-panel="gen">
     <!-- 输入区 -->
     <section class="card input-card" aria-labelledby="inputTitle">
       <h2 id="inputTitle">📝 填写需求</h2>
       <form id="genForm" autocomplete="off">
+        <div class="field two-col">
+          <label>
+            <span>行业</span>
+            <select id="industry"></select>
+          </label>
+          <label id="subWrap" hidden>
+            <span>细分方向</span>
+            <select id="sub"></select>
+          </label>
+        </div>
+
         <label class="field">
           <span>主题 / 产品 <em>*</em></span>
           <input id="topic" type="text" maxlength="60" required placeholder="如：潜水面镜怎么选、衣帽间铝制侧拉门" />
@@ -45,6 +64,16 @@
             <div class="chips" id="kwChips"></div>
             <input id="kwInput" type="text" maxlength="20" placeholder="如：防雾、贴合度、近视" />
           </div>
+        </div>
+
+        <div class="field lib-field">
+          <span>带入我的资料 <small class="muted">（可选，让文案有真实细节）</small></span>
+          <div class="two-col">
+            <label><span class="sub-label">账号档案</span><select id="genProfile"><option value="">不带入</option></select></label>
+            <label><span class="sub-label">真实案例</span><button type="button" class="btn ghost pick-btn" id="genCasesBtn">选择案例（0）</button></label>
+          </div>
+          <div id="genCasesBox" class="case-pick" hidden></div>
+          <p class="hint" id="libHint">在「📚 资料库」里添加档案和案例。选多个案例时，批量生成会按顺序每篇带入一个。</p>
         </div>
 
         <div class="field">
@@ -72,6 +101,7 @@
             <label><input type="radio" name="mode" value="ai" /><span>✨ AI 模式<small>Claude · 需 API Key</small></span></label>
           </div>
           <p class="hint" id="modeHint"></p>
+          <p class="hint" id="industryHint"></p>
         </div>
 
         <div class="form-actions">
@@ -104,6 +134,217 @@
           <p class="muted">没有 API Key 也能用模板模式先试试～</p>
         </div>
       </div>
+    </section>
+  </main>
+
+  <!-- ============ 数据：效果回填 + 统计 + 备份 ============ -->
+  <main class="panel page-panel" data-panel="data" hidden>
+    <section class="card">
+      <div class="output-head">
+        <h2>📊 效果统计</h2>
+        <button type="button" class="btn ghost sm" id="btnStatsCsv">⬇️ 导出数据 CSV</button>
+      </div>
+      <div id="statsSummary" class="stat-grid"></div>
+      <div id="statsBreakdown"></div>
+    </section>
+    <section class="card">
+      <div class="output-head">
+        <h2>📝 效果回填</h2>
+        <div class="opt-row">
+          <select id="pubFilter" class="mini-select">
+            <option value="all">全部笔记</option>
+            <option value="pub">已发布</option>
+            <option value="unpub">未发布</option>
+          </select>
+          <input id="pubSearch" class="mini-select" type="search" placeholder="搜索标题" />
+        </div>
+      </div>
+      <p class="hint">发布后把笔记标记为“已发布”，过几天回来填上点赞、收藏、评论和咨询数，就能看出哪类内容效果好。数据保存在本机浏览器。</p>
+      <div id="pubList" class="pub-list"></div>
+    </section>
+    <section class="card">
+      <h2>💾 备份与迁移</h2>
+      <p class="hint">把全部数据（账号档案、案例库、历史记录与效果数据、内容日历、自定义违禁词、设置）导出成一个 JSON 文件，在手机和电脑之间转移。<b>🔒 不包含 API Key</b>，换设备后需要重新填写。</p>
+      <div class="opt-row">
+        <button type="button" class="btn primary" id="btnExportAll">⬇️ 导出全部数据</button>
+        <label class="btn ghost file-btn">⬆️ 导入（合并）<input id="importMerge" type="file" accept="application/json,.json" /></label>
+        <label class="btn ghost file-btn">⬆️ 导入（覆盖）<input id="importReplace" type="file" accept="application/json,.json" /></label>
+      </div>
+      <p class="hint">合并：保留现有数据，加入备份里新的档案/案例/历史（同一条记录以备份为准）。覆盖：先清空本机数据再导入。</p>
+      <p class="hint" id="backupMsg"></p>
+    </section>
+  </main>
+
+  <!-- ============ 内容日历 ============ -->
+  <main class="panel page-panel" data-panel="calendar" hidden>
+    <section class="card">
+      <h2>🗓 内容日历 <small class="mode-note muted"></small></h2>
+      <p class="hint">一次规划 7 / 14 / 30 天的选题，按比例搭配干货、案例、避坑、互动；点某一天的「生成」就能直接写出那天的笔记。</p>
+      <div class="cal-form">
+        <label><span>行业</span><select id="calIndustry"></select></label>
+        <label><span>细分方向</span><select id="calSub"></select></label>
+        <label><span>主题方向（可选）</span><input id="calTopic" type="text" maxlength="30" placeholder="如：老房门窗改造" /></label>
+        <label><span>账号档案</span><select id="calProfile"><option value="">不带入</option></select></label>
+        <label><span>开始日期</span><input id="calStart" type="date" /></label>
+        <label><span>天数</span><select id="calDays"><option value="7">7 天</option><option value="14" selected>14 天</option><option value="30">30 天</option></select></label>
+      </div>
+      <div class="field">
+        <span>内容比例（%）</span>
+        <div class="ratio-row">
+          <label>📚 干货<input type="number" id="calR_ganhuo" min="0" max="100" value="40" /></label>
+          <label>📍 案例<input type="number" id="calR_case" min="0" max="100" value="20" /></label>
+          <label>⚠️ 避坑<input type="number" id="calR_bikeng" min="0" max="100" value="25" /></label>
+          <label>💬 互动<input type="number" id="calR_interact" min="0" max="100" value="15" /></label>
+        </div>
+        <p class="hint">案例类会依次带入「资料库」里本行业的真实案例；没有案例时会提示你先去录入。</p>
+      </div>
+      <div class="opt-row">
+        <button type="button" class="btn primary" id="btnCalPlan">🗓 生成规划</button>
+        <button type="button" class="btn ghost" id="btnCalCsv" disabled>⬇️ 导出 CSV</button>
+        <button type="button" class="btn ghost" id="btnCalClear" disabled>清空</button>
+      </div>
+      <p class="hint" id="calMsg"></p>
+    </section>
+    <section class="card" id="calPlanCard" hidden>
+      <div class="output-head"><h2>📋 选题规划 <small id="calMeta" class="muted"></small></h2></div>
+      <div id="calList" class="cal-list"></div>
+    </section>
+  </main>
+
+  <!-- ============ 资料库 ============ -->
+  <main class="panel page-panel lib-panel" data-panel="library" hidden>
+    <section class="card">
+      <div class="output-head">
+        <h2>👤 身份 / 账号档案</h2>
+        <button type="button" class="btn primary sm" id="btnNewProfile">＋ 新建档案</button>
+      </div>
+      <p class="hint">比如“洛杉矶门窗师傅 Leo”“PADI 潜水教练 Lisa”。生成时选中档案，文案会用这个身份第一人称来写，并带上你的服务区域、从业年限、特色和常用结尾。</p>
+      <div id="profileList" class="lib-list"></div>
+    </section>
+    <section class="card">
+      <div class="output-head">
+        <h2>📁 真实案例库</h2>
+        <div class="opt-row">
+          <select id="caseFilter" class="mini-select"><option value="">全部行业</option></select>
+          <button type="button" class="btn primary sm" id="btnNewCase">＋ 新增案例</button>
+        </div>
+      </div>
+      <p class="hint">记录真实做过的项目，生成时带入，正文会写进具体的时间、城市、问题、做法、费用和结果。🔒 只保存在本机浏览器；请不要写客户真实姓名、门牌号等隐私信息。</p>
+      <div id="caseList" class="lib-list"></div>
+    </section>
+  </main>
+
+  <!-- ============ 工具 ============ -->
+  <main class="panel tools-panel" data-panel="tools" hidden>
+    <div class="subtabs" id="toolTabs">
+      <button type="button" class="subtab active" data-tool="check">🛡 违禁词检测</button>
+      <button type="button" class="subtab" data-tool="material">📝 素材变笔记</button>
+      <button type="button" class="subtab" data-tool="remix">🔍 爆款拆解</button>
+      <button type="button" class="subtab" data-tool="reply">💬 回复话术</button>
+    </div>
+
+    <section class="card tool" data-toolpanel="material" hidden>
+      <h2>📝 素材变笔记</h2>
+      <p class="hint">把现场随手记的几句话和照片描述丢进来，整理成一篇真实体验笔记；还能一键存进案例库，下次直接带入。<span class="mode-note"></span></p>
+      <div class="two-col field">
+        <label><span>行业</span><select id="matIndustry"></select></label>
+        <label><span>细分方向</span><select id="matSub"></select></label>
+      </div>
+      <div class="two-col field">
+        <label><span>主题（可留空）</span><input id="matTopic" type="text" maxlength="40" placeholder="如：阿凯迪亚衣帽间门改造" /></label>
+        <label><span>账号档案</span><select id="matProfile"><option value="">不带入</option></select></label>
+      </div>
+      <label class="field">
+        <span>现场要点（每行一条，想到什么写什么）</span>
+        <textarea id="matPoints" rows="7" placeholder="11月2日 阿凯迪亚 1962 年老房&#10;客户是刚搬来的一家四口&#10;主卧衣柜镜面推拉门下轨脱轨，推不动&#10;拆掉旧门，换黑色极窄铝框长虹玻璃三联动门&#10;加了感应 LED 灯带&#10;一天装完，客户很满意&#10;总价 $2,800 含拆旧"></textarea>
+      </label>
+      <label class="field">
+        <span>照片描述（每行一张，可留空）</span>
+        <textarea id="matPhotos" rows="3" placeholder="改造前：镜面门歪了&#10;装好后的正面&#10;灯带亮起的内部"></textarea>
+      </label>
+      <div class="field">
+        <span>语气</span>
+        <div class="opt-row" id="matTone">
+          <button type="button" class="opt active" data-tone="tiyan">🙋 真实体验</button>
+          <button type="button" class="opt" data-tone="ganhuo">📚 干货科普</button>
+          <button type="button" class="opt" data-tone="bikeng">⚠️ 避坑提醒</button>
+          <button type="button" class="opt" data-tone="zhongcao">💖 种草分享</button>
+        </div>
+      </div>
+      <div class="opt-row">
+        <button type="button" class="btn primary" id="btnMatGen">✨ 整理成笔记</button>
+        <button type="button" class="btn ghost" id="btnMatCase">💾 直接存为案例</button>
+      </div>
+      <p class="hint" id="matMsg"></p>
+    </section>
+
+    <section class="card tool" data-toolpanel="remix" hidden>
+      <h2>🔍 爆款拆解</h2>
+      <p class="hint">粘贴一篇别人的爆款笔记，拆解它的标题套路、开头钩子和结构；然后<b>只借鉴结构</b>，用你自己的资料库内容重写，不照抄原文句子（会自动检查和原文的重复片段）。<span class="mode-note"></span></p>
+      <label class="field"><span>原笔记标题</span><input id="rmTitle" type="text" maxlength="60" placeholder="粘贴标题" /></label>
+      <label class="field"><span>原笔记正文</span><textarea id="rmBody" rows="8" placeholder="粘贴正文（可带话题标签）"></textarea></label>
+      <div class="opt-row"><button type="button" class="btn primary" id="btnRmAnalyze">🔍 拆解</button></div>
+      <div id="rmAnalysis" class="rm-analysis"></div>
+      <div id="rmRewrite" hidden>
+        <h3 class="sec-title">✍️ 用我的资料仿结构重写</h3>
+        <div class="two-col field">
+          <label><span>行业</span><select id="rmIndustry"></select></label>
+          <label><span>细分方向</span><select id="rmSub"></select></label>
+        </div>
+        <label class="field"><span>我的主题</span><input id="rmTopic" type="text" maxlength="40" placeholder="如：衣帽间铝制侧拉门" /></label>
+        <div class="two-col field">
+          <label><span>账号档案</span><select id="rmProfile"><option value="">不带入</option></select></label>
+          <label><span>真实案例</span><select id="rmCase"><option value="">不带入</option></select></label>
+        </div>
+        <div class="opt-row"><button type="button" class="btn primary" id="btnRmRewrite">✍️ 仿结构重写</button></div>
+        <p class="hint" id="rmMsg"></p>
+      </div>
+    </section>
+
+    <section class="card tool" data-toolpanel="reply" hidden>
+      <h2>💬 评论 / 私信回复话术</h2>
+      <p class="hint">针对“多少钱、能不能上门、质量怎么样、多久能做好”等常见问题，生成专业又不违规的回复（不出现电话、微信等导流信息，回复会自动做违禁词检测）。<span class="mode-note"></span></p>
+      <div class="two-col field">
+        <label><span>行业</span><select id="rpIndustry"></select></label>
+        <label><span>账号档案</span><select id="rpProfile"><option value="">不带入</option></select></label>
+      </div>
+      <div class="field">
+        <span>回复场景</span>
+        <div class="opt-row" id="rpScene">
+          <button type="button" class="opt active" data-scene="comment">💬 评论区回复</button>
+          <button type="button" class="opt" data-scene="dm">✉️ 私信回复</button>
+        </div>
+      </div>
+      <div class="field">
+        <span>常见问题（可多选）</span>
+        <div class="check-grid" id="rpQuestions"></div>
+      </div>
+      <label class="field"><span>其他问题（每行一个，可留空）</span><textarea id="rpCustom" rows="3" placeholder="如：你们做不做商业项目？"></textarea></label>
+      <div class="opt-row"><button type="button" class="btn primary" id="btnRpGen">💬 生成回复</button></div>
+      <p class="hint" id="rpMsg"></p>
+      <div id="rpResult" class="rp-result"></div>
+    </section>
+
+    <section class="card tool" data-toolpanel="check">
+      <h2>🛡 违禁词 / 限流词检测</h2>
+      <p class="hint">粘贴任意文案（笔记正文、标题、评论回复、海报文字…），检测广告法极限词、夸大功效、导流词、价格诱导，并给出合规替换建议。</p>
+      <label class="field">
+        <span>要检测的文案</span>
+        <textarea id="chkInput" rows="9" placeholder="把文案粘贴到这里…"></textarea>
+      </label>
+      <div class="opt-row">
+        <button type="button" class="btn primary" id="btnChk">🔍 开始检测</button>
+        <button type="button" class="btn ghost" id="btnChkCopy">📋 复制文案</button>
+        <button type="button" class="btn ghost" id="btnChkClear">清空</button>
+      </div>
+      <div id="chkResult" class="chk-result"></div>
+      <details class="extras" id="customWordsBox">
+        <summary>✏️ 自定义词库（只保存在本机浏览器）</summary>
+        <p class="hint">每行一个词，可用“=”写替换建议，多个建议用“/”分隔。例如：<code>秒杀=优惠/活动价</code>、<code>包安装</code>。保存后对所有文案生效。</p>
+        <textarea id="customWords" rows="5" placeholder="秒杀=优惠/活动价"></textarea>
+        <div class="opt-row" style="margin:8px 0 12px"><button type="button" class="btn ghost sm" id="btnSaveCustom">保存自定义词</button></div>
+        <p class="hint">完整词库在项目文件 <code>banned-words.js</code> 里，可以直接编辑。</p>
+      </details>
     </section>
   </main>
 
@@ -178,9 +419,136 @@
     </div>
   </dialog>
 
+  <!-- 封面弹窗 -->
+  <dialog id="coverDlg" class="dlg wide cover-dlg">
+    <div class="dlg-inner">
+      <div class="dlg-head">
+        <h3>🎨 小红书封面 <small id="coverTitle"></small></h3>
+        <button class="icon-btn" type="button" id="btnCloseCover" aria-label="关闭">✕</button>
+      </div>
+      <div class="cover-layout">
+        <div class="cover-preview">
+          <img id="coverImg" alt="封面预览" />
+          <p class="hint center">1080×1440（3:4 竖版）· 手机可长按图片保存</p>
+        </div>
+        <div class="cover-controls">
+          <div class="field">
+            <span>封面大字（点选一组，也可以直接改）</span>
+            <div id="coverSets" class="cover-sets"></div>
+          </div>
+          <label class="field">
+            <span>主标题 <small class="muted">回车可手动换行</small></span>
+            <textarea id="coverMain" rows="2" maxlength="24"></textarea>
+          </label>
+          <label class="field">
+            <span>副标题</span>
+            <input id="coverSub" type="text" maxlength="24" />
+          </label>
+          <label class="field">
+            <span>角标（可留空）</span>
+            <input id="coverTag" type="text" maxlength="12" placeholder="如 #门窗" />
+          </label>
+          <div class="field">
+            <span>配色</span>
+            <div id="coverPalettes" class="swatches"></div>
+          </div>
+          <div class="field">
+            <span>排版</span>
+            <div id="coverLayouts" class="opt-row"></div>
+          </div>
+          <div class="field">
+            <span>背景照片</span>
+            <div class="opt-row">
+              <label class="btn ghost sm file-btn">📷 上传照片<input id="coverFile" type="file" accept="image/*" /></label>
+              <button class="btn ghost sm" type="button" id="btnClearPhoto" hidden>移除照片</button>
+            </div>
+            <div id="photoCtrls" class="photo-ctrls" hidden>
+              <label>缩放 <input id="photoZoom" type="range" min="100" max="250" value="100" /></label>
+              <label>左右 <input id="photoX" type="range" min="0" max="100" value="50" /></label>
+              <label>上下 <input id="photoY" type="range" min="0" max="100" value="50" /></label>
+            </div>
+            <p class="hint">🔒 照片只在你的浏览器里处理，不会上传到任何地方。</p>
+          </div>
+          <div class="dlg-actions">
+            <button class="btn primary" type="button" id="btnDownloadCover">⬇️ 下载 PNG</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- 档案编辑 -->
+  <dialog id="profileDlg" class="dlg">
+    <form method="dialog" class="dlg-inner" id="profileForm">
+      <div class="dlg-head"><h3>👤 账号档案</h3><button class="icon-btn" value="cancel" formnovalidate aria-label="关闭">✕</button></div>
+      <input type="hidden" name="id" />
+      <label class="field"><span>档案名称 <em>*</em></span><input name="name" type="text" maxlength="30" required placeholder="如：门窗号-Leo" /></label>
+      <label class="field"><span>身份</span><input name="identity" type="text" maxlength="40" placeholder="如：洛杉矶门窗安装师傅 Leo" /></label>
+      <div class="two-col">
+        <label><span>服务区域</span><input name="area" type="text" maxlength="40" placeholder="如：圣盖博谷、橙县" /></label>
+        <label><span>从业年限</span><input name="years" type="text" maxlength="10" placeholder="如：12" /></label>
+      </div>
+      <label class="field"><span>特色 / 优势</span><textarea name="features" rows="2" maxlength="120" placeholder="如：自己带队安装不转包，有加州 CSLB 执照"></textarea></label>
+      <label class="field"><span>说话风格</span><input name="style" type="text" maxlength="60" placeholder="如：实在、口语化、像老朋友聊天，偶尔带点幽默" /></label>
+      <label class="field"><span>常用结尾</span><textarea name="ending" rows="2" maxlength="120" placeholder="如：我是 Leo，在 626 做门窗 12 年，关注我少踩坑～"></textarea></label>
+      <div class="dlg-actions"><button class="btn ghost" value="cancel" formnovalidate>取消</button><button class="btn primary" type="submit" value="save">保存</button></div>
+    </form>
+  </dialog>
+
+  <!-- 案例编辑 -->
+  <dialog id="caseDlg" class="dlg">
+    <form method="dialog" class="dlg-inner" id="caseForm">
+      <div class="dlg-head"><h3>📁 真实案例</h3><button class="icon-btn" value="cancel" formnovalidate aria-label="关闭">✕</button></div>
+      <input type="hidden" name="id" />
+      <div class="two-col">
+        <label><span>行业</span><select name="industry"></select></label>
+        <label><span>细分方向</span><select name="sub"></select></label>
+      </div>
+      <div class="two-col">
+        <label><span>时间</span><input name="time" type="text" maxlength="20" placeholder="如：2026年5月" /></label>
+        <label><span>城市</span><input name="city" type="text" maxlength="20" placeholder="如：阿凯迪亚" /></label>
+      </div>
+      <label class="field"><span>客户情况</span><input name="client" type="text" maxlength="60" placeholder="如：刚买 1960 年老房的年轻夫妻" /></label>
+      <label class="field"><span>问题</span><textarea name="problem" rows="2" maxlength="200" placeholder="客户遇到了什么问题"></textarea></label>
+      <label class="field"><span>解决方案</span><textarea name="solution" rows="3" maxlength="300" placeholder="你是怎么做的：材料、工艺、步骤"></textarea></label>
+      <div class="two-col">
+        <label><span>费用</span><input name="cost" type="text" maxlength="40" placeholder="如：$2,800（含拆旧）" /></label>
+        <label><span>结果</span><input name="result" type="text" maxlength="80" placeholder="如：一天装完，推拉顺滑" /></label>
+      </div>
+      <label class="field"><span>备注</span><input name="note" type="text" maxlength="100" placeholder="如：客户同意分享照片" /></label>
+      <div class="dlg-actions"><button class="btn ghost" value="cancel" formnovalidate>取消</button><button class="btn primary" type="submit" value="save">保存</button></div>
+    </form>
+  </dialog>
+
+  <!-- 一稿多用 -->
+  <dialog id="repDlg" class="dlg wide">
+    <div class="dlg-inner">
+      <div class="dlg-head"><h3>♻️ 一稿多用 <small id="repTitle" class="muted"></small></h3><button class="icon-btn" type="button" id="btnCloseRep" aria-label="关闭">✕</button></div>
+      <div class="opt-row" id="repTabs">
+        <button type="button" class="opt active" data-rep="script">🎬 抖音/视频号口播脚本</button>
+        <button type="button" class="opt" data-rep="en">🌐 English（IG / Facebook）</button>
+      </div>
+      <p class="hint" id="repHint"></p>
+      <div id="repOut" class="rep-out"></div>
+      <div class="dlg-actions">
+        <button type="button" class="btn ghost" id="btnRepRegen">🔄 重新生成</button>
+        <button type="button" class="btn primary" id="btnRepCopy">📋 复制</button>
+      </div>
+    </div>
+  </dialog>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <script src="banned-words.js"></script>
+  <script src="checker.js"></script>
+  <script src="industries.js"></script>
   <script src="templates.js"></script>
+  <script src="cover.js"></script>
   <script src="app.js"></script>
+  <script src="library.js"></script>
+  <script src="tools.js"></script>
+  <script src="calendar.js"></script>
+  <script src="repurpose.js"></script>
+  <script src="data.js"></script>
 </body>
 </html>
