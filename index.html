@@ -28,6 +28,7 @@
     <button type="button" class="tab active" data-tab="gen"><span>✍️</span>生成</button>
     <button type="button" class="tab" data-tab="tools"><span>🛠</span>工具</button>
     <button type="button" class="tab" data-tab="library"><span>📚</span>资料库</button>
+    <button type="button" class="tab" data-tab="calendar"><span>🗓</span>日历</button>
   </nav>
 
   <main class="layout panel" data-panel="gen">
@@ -135,6 +136,42 @@
     </section>
   </main>
 
+  <!-- ============ 内容日历 ============ -->
+  <main class="panel page-panel" data-panel="calendar" hidden>
+    <section class="card">
+      <h2>🗓 内容日历 <small class="mode-note muted"></small></h2>
+      <p class="hint">一次规划 7 / 14 / 30 天的选题，按比例搭配干货、案例、避坑、互动；点某一天的「生成」就能直接写出那天的笔记。</p>
+      <div class="cal-form">
+        <label><span>行业</span><select id="calIndustry"></select></label>
+        <label><span>细分方向</span><select id="calSub"></select></label>
+        <label><span>主题方向（可选）</span><input id="calTopic" type="text" maxlength="30" placeholder="如：老房门窗改造" /></label>
+        <label><span>账号档案</span><select id="calProfile"><option value="">不带入</option></select></label>
+        <label><span>开始日期</span><input id="calStart" type="date" /></label>
+        <label><span>天数</span><select id="calDays"><option value="7">7 天</option><option value="14" selected>14 天</option><option value="30">30 天</option></select></label>
+      </div>
+      <div class="field">
+        <span>内容比例（%）</span>
+        <div class="ratio-row">
+          <label>📚 干货<input type="number" id="calR_ganhuo" min="0" max="100" value="40" /></label>
+          <label>📍 案例<input type="number" id="calR_case" min="0" max="100" value="20" /></label>
+          <label>⚠️ 避坑<input type="number" id="calR_bikeng" min="0" max="100" value="25" /></label>
+          <label>💬 互动<input type="number" id="calR_interact" min="0" max="100" value="15" /></label>
+        </div>
+        <p class="hint">案例类会依次带入「资料库」里本行业的真实案例；没有案例时会提示你先去录入。</p>
+      </div>
+      <div class="opt-row">
+        <button type="button" class="btn primary" id="btnCalPlan">🗓 生成规划</button>
+        <button type="button" class="btn ghost" id="btnCalCsv" disabled>⬇️ 导出 CSV</button>
+        <button type="button" class="btn ghost" id="btnCalClear" disabled>清空</button>
+      </div>
+      <p class="hint" id="calMsg"></p>
+    </section>
+    <section class="card" id="calPlanCard" hidden>
+      <div class="output-head"><h2>📋 选题规划 <small id="calMeta" class="muted"></small></h2></div>
+      <div id="calList" class="cal-list"></div>
+    </section>
+  </main>
+
   <!-- ============ 资料库 ============ -->
   <main class="panel page-panel lib-panel" data-panel="library" hidden>
     <section class="card">
@@ -163,6 +200,8 @@
     <div class="subtabs" id="toolTabs">
       <button type="button" class="subtab active" data-tool="check">🛡 违禁词检测</button>
       <button type="button" class="subtab" data-tool="material">📝 素材变笔记</button>
+      <button type="button" class="subtab" data-tool="remix">🔍 爆款拆解</button>
+      <button type="button" class="subtab" data-tool="reply">💬 回复话术</button>
     </div>
 
     <section class="card tool" data-toolpanel="material" hidden>
@@ -198,6 +237,53 @@
         <button type="button" class="btn ghost" id="btnMatCase">💾 直接存为案例</button>
       </div>
       <p class="hint" id="matMsg"></p>
+    </section>
+
+    <section class="card tool" data-toolpanel="remix" hidden>
+      <h2>🔍 爆款拆解</h2>
+      <p class="hint">粘贴一篇别人的爆款笔记，拆解它的标题套路、开头钩子和结构；然后<b>只借鉴结构</b>，用你自己的资料库内容重写，不照抄原文句子（会自动检查和原文的重复片段）。<span class="mode-note"></span></p>
+      <label class="field"><span>原笔记标题</span><input id="rmTitle" type="text" maxlength="60" placeholder="粘贴标题" /></label>
+      <label class="field"><span>原笔记正文</span><textarea id="rmBody" rows="8" placeholder="粘贴正文（可带话题标签）"></textarea></label>
+      <div class="opt-row"><button type="button" class="btn primary" id="btnRmAnalyze">🔍 拆解</button></div>
+      <div id="rmAnalysis" class="rm-analysis"></div>
+      <div id="rmRewrite" hidden>
+        <h3 class="sec-title">✍️ 用我的资料仿结构重写</h3>
+        <div class="two-col field">
+          <label><span>行业</span><select id="rmIndustry"></select></label>
+          <label><span>细分方向</span><select id="rmSub"></select></label>
+        </div>
+        <label class="field"><span>我的主题</span><input id="rmTopic" type="text" maxlength="40" placeholder="如：衣帽间铝制侧拉门" /></label>
+        <div class="two-col field">
+          <label><span>账号档案</span><select id="rmProfile"><option value="">不带入</option></select></label>
+          <label><span>真实案例</span><select id="rmCase"><option value="">不带入</option></select></label>
+        </div>
+        <div class="opt-row"><button type="button" class="btn primary" id="btnRmRewrite">✍️ 仿结构重写</button></div>
+        <p class="hint" id="rmMsg"></p>
+      </div>
+    </section>
+
+    <section class="card tool" data-toolpanel="reply" hidden>
+      <h2>💬 评论 / 私信回复话术</h2>
+      <p class="hint">针对“多少钱、能不能上门、质量怎么样、多久能做好”等常见问题，生成专业又不违规的回复（不出现电话、微信等导流信息，回复会自动做违禁词检测）。<span class="mode-note"></span></p>
+      <div class="two-col field">
+        <label><span>行业</span><select id="rpIndustry"></select></label>
+        <label><span>账号档案</span><select id="rpProfile"><option value="">不带入</option></select></label>
+      </div>
+      <div class="field">
+        <span>回复场景</span>
+        <div class="opt-row" id="rpScene">
+          <button type="button" class="opt active" data-scene="comment">💬 评论区回复</button>
+          <button type="button" class="opt" data-scene="dm">✉️ 私信回复</button>
+        </div>
+      </div>
+      <div class="field">
+        <span>常见问题（可多选）</span>
+        <div class="check-grid" id="rpQuestions"></div>
+      </div>
+      <label class="field"><span>其他问题（每行一个，可留空）</span><textarea id="rpCustom" rows="3" placeholder="如：你们做不做商业项目？"></textarea></label>
+      <div class="opt-row"><button type="button" class="btn primary" id="btnRpGen">💬 生成回复</button></div>
+      <p class="hint" id="rpMsg"></p>
+      <div id="rpResult" class="rp-result"></div>
     </section>
 
     <section class="card tool" data-toolpanel="check">
@@ -405,5 +491,6 @@
   <script src="app.js"></script>
   <script src="library.js"></script>
   <script src="tools.js"></script>
+  <script src="calendar.js"></script>
 </body>
 </html>

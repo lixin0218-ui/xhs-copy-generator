@@ -609,6 +609,8 @@
         </div>
       </div>
       ${p.caseLabel ? `<div class="case-tag">📍 已带入真实案例：${esc(p.caseLabel)}</div>` : ''}
+      ${p.remixFrom ? `<div class="case-tag">🔍 仿结构：${esc(p.remixFrom)}</div>` : ''}
+      ${p.originality ? `<div class="${p.originality.startsWith('✅') ? 'overlap-ok' : 'overlap-warn'}">${esc(p.originality)}</div>` : ''}
       <div class="label">备选标题</div>
       <ul class="titles">${titles}</ul>
       <div class="label">正文</div>
