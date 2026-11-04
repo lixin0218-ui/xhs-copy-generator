@@ -586,7 +586,9 @@
     const list = loadHistory();
     const idx = list.findIndex((h) => h.id === current.id);
     if (idx < 0) return;
-    list[idx] = { ...list[idx], ...current, posts: current.posts.filter((p) => p && !p.error) };
+    const old = list[idx].posts || [];
+    const posts = current.posts.filter((p) => p && !p.error).map((p, j) => (p.stats || !old[j] || !old[j].stats ? p : { ...p, stats: old[j].stats }));
+    list[idx] = { ...list[idx], ...current, posts };
     store.set(LS.history, JSON.stringify(list));
   }
 
@@ -604,6 +606,7 @@
         <span class="post-no">#${i + 1}${p.sub ? ` <small class="muted">${esc(p.sub)}</small>` : ''}${complianceBadge(p)}</span>
         <div class="post-tools">
           ${p.caseDraft ? `<button class="btn ghost sm" type="button" data-act="save-case" data-i="${i}">💾 存为案例</button>` : ''}
+          <button class="btn ghost sm" type="button" data-act="repurpose" data-i="${i}">♻️ 一稿多用</button>
           <button class="btn ghost sm" type="button" data-act="copy-body" data-i="${i}">复制正文+标签</button>
           <button class="btn primary sm" type="button" data-act="copy" data-i="${i}">📋 一键复制</button>
         </div>
@@ -669,6 +672,7 @@
     if (b.dataset.act === 'copy-body') copyText([p.body, '', p.cta, '', p.tags.join(' ')].join('\n'));
     if (b.dataset.act === 'copy-prompt') copyText(p.imagePrompts[Number(b.dataset.j)][b.dataset.lang]);
     if (b.dataset.act === 'cover') openCover(i);
+    if (b.dataset.act === 'repurpose') document.dispatchEvent(new CustomEvent('xhs:repurpose', { detail: i }));
     if (b.dataset.act === 'save-case' && window.XHSLibrary) window.XHSLibrary.openCase({ ...p.caseDraft });
   });
 
@@ -952,7 +956,13 @@
       id: batch.id, time: batch.time, input: batch.input, mode: batch.mode, model: batch.model,
       posts: batch.posts.filter((p) => p && !p.error),
     });
-    let trimmed = list.slice(0, MAX_HISTORY);
+    // 超出上限时，优先删除最旧的、没有填过效果数据的记录
+    let trimmed = list;
+    const hasStats = (h) => h.posts.some((p) => p && p.stats && (p.stats.published || p.stats.likes || p.stats.saves));
+    for (let i = trimmed.length - 1; trimmed.length > MAX_HISTORY && i >= 0; i--) {
+      if (!hasStats(trimmed[i])) trimmed = trimmed.filter((_, j) => j !== i);
+    }
+    trimmed = trimmed.slice(0, MAX_HISTORY + 30);
     // 空间不足时逐条删除最旧的记录
     while (trimmed.length && !store.set(LS.history, JSON.stringify(trimmed))) trimmed.pop();
   }

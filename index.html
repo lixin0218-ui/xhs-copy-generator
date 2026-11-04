@@ -29,6 +29,7 @@
     <button type="button" class="tab" data-tab="tools"><span>🛠</span>工具</button>
     <button type="button" class="tab" data-tab="library"><span>📚</span>资料库</button>
     <button type="button" class="tab" data-tab="calendar"><span>🗓</span>日历</button>
+    <button type="button" class="tab" data-tab="data"><span>📊</span>数据</button>
   </nav>
 
   <main class="layout panel" data-panel="gen">
@@ -133,6 +134,33 @@
           <p class="muted">没有 API Key 也能用模板模式先试试～</p>
         </div>
       </div>
+    </section>
+  </main>
+
+  <!-- ============ 数据：效果回填 + 统计 ============ -->
+  <main class="panel page-panel" data-panel="data" hidden>
+    <section class="card">
+      <div class="output-head">
+        <h2>📊 效果统计</h2>
+        <button type="button" class="btn ghost sm" id="btnStatsCsv">⬇️ 导出数据 CSV</button>
+      </div>
+      <div id="statsSummary" class="stat-grid"></div>
+      <div id="statsBreakdown"></div>
+    </section>
+    <section class="card">
+      <div class="output-head">
+        <h2>📝 效果回填</h2>
+        <div class="opt-row">
+          <select id="pubFilter" class="mini-select">
+            <option value="all">全部笔记</option>
+            <option value="pub">已发布</option>
+            <option value="unpub">未发布</option>
+          </select>
+          <input id="pubSearch" class="mini-select" type="search" placeholder="搜索标题" />
+        </div>
+      </div>
+      <p class="hint">发布后把笔记标记为“已发布”，过几天回来填上点赞、收藏、评论和咨询数，就能看出哪类内容效果好。数据保存在本机浏览器。</p>
+      <div id="pubList" class="pub-list"></div>
     </section>
   </main>
 
@@ -481,6 +509,23 @@
     </form>
   </dialog>
 
+  <!-- 一稿多用 -->
+  <dialog id="repDlg" class="dlg wide">
+    <div class="dlg-inner">
+      <div class="dlg-head"><h3>♻️ 一稿多用 <small id="repTitle" class="muted"></small></h3><button class="icon-btn" type="button" id="btnCloseRep" aria-label="关闭">✕</button></div>
+      <div class="opt-row" id="repTabs">
+        <button type="button" class="opt active" data-rep="script">🎬 抖音/视频号口播脚本</button>
+        <button type="button" class="opt" data-rep="en">🌐 English（IG / Facebook）</button>
+      </div>
+      <p class="hint" id="repHint"></p>
+      <div id="repOut" class="rep-out"></div>
+      <div class="dlg-actions">
+        <button type="button" class="btn ghost" id="btnRepRegen">🔄 重新生成</button>
+        <button type="button" class="btn primary" id="btnRepCopy">📋 复制</button>
+      </div>
+    </div>
+  </dialog>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="banned-words.js"></script>
@@ -492,5 +537,7 @@
   <script src="library.js"></script>
   <script src="tools.js"></script>
   <script src="calendar.js"></script>
+  <script src="repurpose.js"></script>
+  <script src="data.js"></script>
 </body>
 </html>

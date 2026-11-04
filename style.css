@@ -422,3 +422,32 @@ mark.vio, .vio { border-radius: 3px; padding: 0 1px; }
 .rp-a .txt { white-space: pre-wrap; word-break: break-word; font-size: 14px; flex: 1; }
 .rp-a .acts { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; flex: none; }
 @media (max-width: 600px) { .check-grid { grid-template-columns: 1fr 1fr; } }
+
+/* ---------- v3：数据 / 一稿多用 ---------- */
+.stat-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.stat { background: #fafafa; border-radius: 12px; padding: 10px 12px; }
+.stat b { display: block; font-size: 22px; color: var(--red-dark); line-height: 1.2; }
+.stat span { font-size: 12px; color: var(--muted); }
+.bd-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+.bd-table th, .bd-table td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+.bd-table th:first-child, .bd-table td:first-child { text-align: left; }
+.bd-wrap { overflow-x: auto; }
+.bd-title { font-size: 14px; font-weight: 700; margin: 14px 0 4px; }
+.top-list { margin: 4px 0 0; padding-left: 20px; font-size: 14px; }
+.top-list li { margin: 3px 0; }
+.pub-list { display: grid; gap: 8px; }
+.pub-item { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.pub-item.on { border-color: #cfe9d6; background: #f8fcf9; }
+.pub-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.pub-title { font-weight: 600; word-break: break-word; }
+.pub-meta { font-size: 12px; color: var(--muted); }
+.pub-fields { display: grid; grid-template-columns: auto 130px repeat(4, minmax(0, 1fr)); gap: 8px; align-items: end; margin-top: 8px; }
+.pub-fields label { font-size: 12px; color: var(--muted); display: grid; gap: 2px; }
+.pub-fields input[type=number], .pub-fields input[type=date] { width: 100%; padding: 6px 8px; border: 1px solid #e3e3e3; border-radius: 8px; font-size: 15px; }
+.pub-fields .pub-toggle { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text); white-space: nowrap; }
+.pub-toggle input { accent-color: var(--red); width: 18px; height: 18px; }
+.rep-out { white-space: pre-wrap; word-break: break-word; background: #fafafa; border-radius: 10px; padding: 12px; min-height: 160px; max-height: 55vh; overflow: auto; font-size: 14px; margin: 10px 0; }
+@media (max-width: 900px) {
+  .stat-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pub-fields { grid-template-columns: 1fr 1fr; }
+}
