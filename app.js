@@ -45,7 +45,9 @@
     settingsMsg: $('settingsMsg'),
     historyDlg: $('historyDlg'), historyList: $('historyList'),
     toast: $('toast'),
+    industry: $('industry'), sub: $('sub'), subWrap: $('subWrap'), industryHint: $('industryHint'),
   };
+  const INDUSTRIES = window.XHSIndustries.INDUSTRIES;
 
   let keywords = [];
   let current = null; // { id, time, input, mode, model, posts: [] }
@@ -153,6 +155,29 @@
   el.modeHint.addEventListener('click', (e) => {
     if (e.target.closest('[data-open-settings]')) { e.preventDefault(); openSettings(); }
   });
+
+  // ================= 行业选择 =================
+  const TOPIC_EXAMPLES = {
+    general: '如：潜水面镜怎么选、衣帽间铝制侧拉门',
+    doors: '如：衣帽间铝制侧拉门、老房换 Low-E 窗户',
+    food: '如：阿罕布拉新开的川菜馆、626 早茶推荐',
+    scuba: '如：洛杉矶考 OW 潜水证、卡特琳娜岛岸潜',
+    build: '如：后院加建 ADU、买房验房注意事项',
+  };
+  el.industry.innerHTML = Object.entries(INDUSTRIES).map(([id, x]) => `<option value="${id}">${x.icon} ${esc(x.name)}</option>`).join('');
+  function updateSubs(keepSub) {
+    const ind = INDUSTRIES[el.industry.value] || INDUSTRIES.general;
+    const has = ind.subs.length > 0;
+    el.subWrap.hidden = !has;
+    el.sub.innerHTML = has ? `<option value="">不限（随机）</option>` + ind.subs.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join('') : '';
+    if (keepSub && ind.subs.some((x) => x.id === keepSub)) el.sub.value = keepSub;
+    el.topic.placeholder = TOPIC_EXAMPLES[el.industry.value] || TOPIC_EXAMPLES.general;
+    el.audience.placeholder = ind.defaultAudience ? `默认：${ind.defaultAudience}` : '如：潜水新手、装修中的年轻夫妻';
+    el.industryHint.textContent = has
+      ? `🏷 已加载「${ind.name}」专业词库、标题公式和段落模板（面向洛杉矶华人）；AI 模式也会带上行业背景。`
+      : '';
+  }
+  el.industry.addEventListener('change', () => updateSubs());
 
   // ================= 设置 =================
   function openSettings() {
@@ -293,21 +318,51 @@
       body: { type: 'string', description: '正文' },
       cta: { type: 'string', description: '结尾互动引导' },
       tags: { type: 'array', items: { type: 'string' }, description: '5-10 个话题标签，以 # 开头' },
+      covers: {
+        type: 'array',
+        description: '2-3 组封面大字',
+        items: {
+          type: 'object',
+          properties: {
+            main: { type: 'string', description: '封面主标题，不超过 10 个字' },
+            sub: { type: 'string', description: '封面副标题，不超过 14 个字' },
+          },
+          required: ['main', 'sub'],
+          additionalProperties: false,
+        },
+      },
+      shots: { type: 'array', items: { type: 'string' }, description: '3-6 张建议拍摄的真实照片' },
+      imagePrompts: {
+        type: 'array',
+        description: '2-3 组 AI 生图提示词',
+        items: {
+          type: 'object',
+          properties: {
+            zh: { type: 'string', description: '中文提示词（即梦/豆包）' },
+            en: { type: 'string', description: '英文提示词（Midjourney）' },
+          },
+          required: ['zh', 'en'],
+          additionalProperties: false,
+        },
+      },
     },
-    required: ['titles', 'body', 'cta', 'tags'],
+    required: ['titles', 'body', 'cta', 'tags', 'covers', 'shots', 'imagePrompts'],
     additionalProperties: false,
   };
 
-  const SYSTEM_PROMPT = `你是一位资深的小红书爆款文案写手，熟悉平台调性、用户阅读习惯和社区规范。
-请根据用户给出的主题、目标人群、关键词和语气风格，写一篇小红书笔记，按要求的 JSON 结构输出。
+  const SYSTEM_PROMPT = `你是一位资深的小红书爆款文案写手和内容策划，熟悉平台调性、用户阅读习惯和社区规范。
+请根据用户给出的行业、主题、目标人群、关键词和语气风格，写一篇小红书笔记，并给出封面和配图方案，按要求的 JSON 结构输出。
 
 要求：
-- titles：恰好 3 个备选标题，每个不超过 20 个字（emoji 算 1 个字），风格各不相同（比如数字型、悬念型、情绪型），可以带 1-2 个 emoji，要有点击欲但不夸大、不标题党。
-- body：正文 300-600 字。口语化、像真人在分享，分 4-7 段，段与段之间空一行；适当使用 emoji（每段 0-2 个，不要堆砌）；可以用 1️⃣2️⃣3️⃣ 或 ✅❌ 做小标题/要点；自然融入关键词。正文里不要写话题标签，也不要写结尾互动引导。
+- titles：恰好 3 个备选标题，每个不超过 20 个字（emoji 算 1 个字），风格各不相同（比如数字型、悬念型、情绪型），可以带 1-2 个 emoji，要有点击欲但不夸大、不标题党。标题里出现“N 个”时，要和正文的要点数一致。
+- body：正文 300-600 字。口语化、像真人在分享，分 4-7 段，段与段之间空一行；适当使用 emoji（每段 0-2 个，不要堆砌）；可以用 1️⃣2️⃣3️⃣ 或 ✅❌ 做小标题/要点；自然融入关键词。内容要具体、有信息量，多用行业里真实的专业词汇和细节，避免空泛套话。正文里不要写话题标签，也不要写结尾互动引导。
 - cta：1-2 句结尾互动引导，引导评论、点赞、收藏或关注，语气自然。
-- tags：5-10 个话题标签，每个以 # 开头、不含空格，包含主题词、关键词词、人群词和泛流量词。
+- tags：5-10 个话题标签，每个以 # 开头、不含空格，包含主题词、关键词、行业词、地域词和泛流量词。
+- covers：2-3 组封面大字。main 是封面主标题，醒目、有冲击力，不超过 10 个字；sub 是副标题，补充利益点或人群，不超过 14 个字。每组角度不同。
+- shots：3-6 条建议拍摄的真实照片，每条写清楚拍什么、什么角度或光线，要和正文内容对应，方便用户自己拿手机拍。
+- imagePrompts：2-3 组 AI 生图提示词。zh 是给即梦、豆包用的中文提示词；en 是给 Midjourney 用的英文提示词，结尾加 --ar 3:4。描述主体、场景、光线、风格，竖版 3:4，真实摄影质感，不要出现文字、logo 或真实品牌。
 - 遵守小红书社区规范：不使用"最""第一""100%"等绝对化用语，不做医疗/功效承诺，不出现微信号、价格引流、站外链接等内容。
-- 不要编造具体的品牌型号、价格、数据，除非用户提供。`;
+- 不要编造具体的品牌型号、价格、数据，除非用户提供。涉及法规时用“一般 / 通常 / 以当地最新规定为准”的说法。`;
 
   const ANGLES = [
     '新手入门视角', '常见误区拆解', '选购/决策清单', '使用场景对比', '个人经历故事',
@@ -316,18 +371,37 @@
     '清单体（N 个要点）', '情绪共鸣开场', '踩坑后的复盘', '给不同人群的建议', '收藏向速查表',
   ];
 
+  function industryOf(input) {
+    const ind = INDUSTRIES[input.industry] || INDUSTRIES.general;
+    const sub = ind.subs.find((x) => x.id === input.sub) || null;
+    return { ind, sub };
+  }
+
+  function systemPromptFor(input) {
+    const { ind, sub } = industryOf(input);
+    if (!ind.ai) return SYSTEM_PROMPT;
+    let extra = `\n\n【行业背景与专业要求】\n${ind.ai}`;
+    if (sub) extra += `\n本篇细分方向：${sub.name}。可参考的专业词汇：${sub.terms.join('、')}。`;
+    else extra += `\n细分方向不限，可从这些方向中选最贴合主题的：${ind.subs.map((x) => x.name).join('、')}。批量生成时各篇尽量覆盖不同方向。`;
+    return SYSTEM_PROMPT + extra;
+  }
+
   function buildUserPrompt(input, index, total) {
+    const { ind, sub } = industryOf(input);
     const lines = [
+      `行业：${ind.name}${sub ? ' / ' + sub.name : ''}`,
       `主题/产品：${input.topic}`,
-      `目标人群：${input.audience || '不限'}`,
+      `目标人群：${input.audience || ind.defaultAudience || '不限'}`,
       `关键词：${input.keywords.length ? input.keywords.join('、') : '（未指定，可自行围绕主题选择）'}`,
       `语气风格：${TONE_NAMES[input.tone]}`,
     ];
     if (total > 1) {
-      lines.push(`这是同一主题批量生成的第 ${index + 1}/${total} 篇。为了和其他篇有区分，这篇请侧重「${ANGLES[index % ANGLES.length]}」，开头、结构和标题都要换一种写法。`);
+      lines.push(`这是同一主题批量生成的第 ${index + 1}/${total} 篇。为了和其他篇有区分，这篇请侧重「${ANGLES[index % ANGLES.length]}」，开头、结构、标题和封面都要换一种写法。`);
     }
     return lines.join('\n');
   }
+
+  const clip = (str, n) => Array.from(String(str || '').trim()).slice(0, n).join('');
 
   function parsePost(text) {
     let obj;
@@ -338,15 +412,21 @@
       if (!m) throw new ApiError('返回内容无法解析，正在重试', { retryable: true });
       obj = JSON.parse(m[0]);
     }
-    const titles = (Array.isArray(obj.titles) ? obj.titles : []).map((s) => String(s).trim()).filter(Boolean).slice(0, 3);
-    const tags = (Array.isArray(obj.tags) ? obj.tags : [])
+    const arr = (v) => (Array.isArray(v) ? v : []);
+    const titles = arr(obj.titles).map((s) => String(s).trim()).filter(Boolean).slice(0, 3);
+    const tags = arr(obj.tags)
       .map((s) => String(s).trim().replace(/\s+/g, ''))
       .filter(Boolean)
       .map((s) => (s.startsWith('#') ? s : '#' + s))
       .slice(0, 10);
     const body = String(obj.body || '').trim();
     if (!titles.length || !body) throw new ApiError('返回内容不完整，正在重试', { retryable: true });
-    return { titles, body, cta: String(obj.cta || '').trim(), tags };
+    const post = { titles, body, cta: String(obj.cta || '').trim(), tags };
+    post.covers = arr(obj.covers).filter((c) => c && c.main).map((c) => ({ main: clip(c.main, 14), sub: clip(c.sub, 18) })).slice(0, 3);
+    if (!post.covers.length) post.covers = window.XHSTemplates.coverFallback(post);
+    post.shots = arr(obj.shots).map((s) => String(s).trim()).filter(Boolean).slice(0, 6);
+    post.imagePrompts = arr(obj.imagePrompts).filter((x) => x && (x.zh || x.en)).map((x) => ({ zh: String(x.zh || '').trim(), en: String(x.en || '').trim() })).slice(0, 3);
+    return post;
   }
 
   async function generateOneAI(input, index, total, signal) {
@@ -357,9 +437,9 @@
       try {
         const text = await callClaude({
           apiKey, model, signal,
-          system: SYSTEM_PROMPT,
+          system: systemPromptFor(input),
           messages: [{ role: 'user', content: buildUserPrompt(input, index, total) }],
-          maxTokens: 8000,
+          maxTokens: 10000,
           effort: 'medium',
           format: { type: 'json_schema', schema: POST_SCHEMA },
         });
@@ -377,8 +457,10 @@
   }
 
   // ================= 渲染 =================
+  const coversOf = (p) => (p.covers && p.covers.length ? p.covers : window.XHSTemplates.coverFallback(p));
+
   function postToText(p, i) {
-    return [
+    const lines = [
       `【第 ${i + 1} 篇】`,
       '备选标题：',
       ...p.titles.map((t, j) => `${j + 1}. ${t}`),
@@ -389,10 +471,55 @@
       p.cta,
       '',
       p.tags.join(' '),
-    ].join('\n');
+      '',
+      '封面大字：',
+      ...coversOf(p).map((c, j) => `${j + 1}. ${c.main}｜${c.sub}`),
+    ];
+    if (p.shots?.length) lines.push('', '建议拍摄：', ...p.shots.map((x, j) => `${j + 1}. ${x}`));
+    if (p.imagePrompts?.length) {
+      lines.push('', 'AI 生图提示词：');
+      p.imagePrompts.forEach((x, j) => lines.push(`${j + 1}. 中文：${x.zh}`, `   English: ${x.en}`));
+    }
+    return lines.join('\n');
   }
   function postCopyText(p) {
     return [p.titles[0] || '', '', p.body, '', p.cta, '', p.tags.join(' ')].join('\n');
+  }
+
+  // 封面默认样式：按行业挑配色，按篇序轮换排版，让一批封面有变化
+  const INDUSTRY_PALETTE = { general: 'red', doors: 'cream', food: 'red', scuba: 'ocean', build: 'dark' };
+  const LAYOUT_ORDER = ['center', 'card', 'magazine', 'top', 'sticker'];
+  function coverDefaults(i) {
+    const ind = current?.input?.industry || 'general';
+    const tag = INDUSTRIES[ind] && ind !== 'general' ? '#' + INDUSTRIES[ind].name.split('/')[0] : '';
+    return { palette: INDUSTRY_PALETTE[ind] || 'red', layout: LAYOUT_ORDER[i % LAYOUT_ORDER.length], tag };
+  }
+  const thumbCache = new WeakMap();
+  function coverThumb(p, i) {
+    const style = coverStyles.get(p) || coverDefaults(i);
+    const c = coversOf(p)[style.set || 0] || coversOf(p)[0];
+    const opts = { main: style.main ?? c.main, sub: style.sub ?? c.sub, tag: style.tag ?? coverDefaults(i).tag, palette: style.palette, layout: style.layout, photo: style.photo, zoom: style.zoom, posX: style.posX, posY: style.posY };
+    const key = JSON.stringify({ ...opts, photo: opts.photo ? opts.photo.src : null });
+    const cached = thumbCache.get(p);
+    if (cached && cached.key === key) return cached.url;
+    const url = window.XHSCover.toDataURL(opts, 0.3);
+    thumbCache.set(p, { key, url });
+    return url;
+  }
+
+  function extrasHTML(p, i) {
+    const shots = p.shots || [];
+    const prompts = p.imagePrompts || [];
+    if (!shots.length && !prompts.length) return '';
+    return `<details class="extras">
+      <summary>📷 配图建议（${shots.length} 张拍摄清单${prompts.length ? ` · ${prompts.length} 组生图提示词` : ''}）</summary>
+      ${shots.length ? `<div class="label">建议拍摄的真实照片</div><ol class="shots">${shots.map((x) => `<li>${esc(x)}</li>`).join('')}</ol>` : ''}
+      ${prompts.length ? `<div class="label">AI 生图提示词（Midjourney / 即梦 / 豆包）</div>
+        ${prompts.map((x, j) => `<div class="prompt">
+          ${x.zh ? `<div class="prompt-line"><span><em>中</em>${esc(x.zh)}</span><button class="mini-copy" type="button" data-act="copy-prompt" data-i="${i}" data-j="${j}" data-lang="zh">复制</button></div>` : ''}
+          ${x.en ? `<div class="prompt-line"><span><em>EN</em>${esc(x.en)}</span><button class="mini-copy" type="button" data-act="copy-prompt" data-i="${i}" data-j="${j}" data-lang="en">复制</button></div>` : ''}
+        </div>`).join('')}` : ''}
+    </details>`;
   }
 
   function postHTML(p, i) {
@@ -402,9 +529,11 @@
       const n = textLen(t);
       return `<li><span>${esc(t)}</span><span><span class="len ${n > 20 ? 'over' : ''}">${n}字</span><button class="mini-copy" type="button" data-copy-title="${esc(t)}">复制</button></span></li>`;
     }).join('');
+    let thumb = '';
+    try { thumb = coverThumb(p, i); } catch { /* 极少数浏览器不支持 canvas，忽略 */ }
     return `<article class="post" data-i="${i}">
       <div class="post-head">
-        <span class="post-no">#${i + 1}</span>
+        <span class="post-no">#${i + 1}${p.sub ? ` <small class="muted">${esc(p.sub)}</small>` : ''}</span>
         <div class="post-tools">
           <button class="btn ghost sm" type="button" data-act="copy-body" data-i="${i}">复制正文+标签</button>
           <button class="btn primary sm" type="button" data-act="copy" data-i="${i}">📋 一键复制</button>
@@ -417,6 +546,15 @@
       ${p.cta ? `<div class="label">互动引导</div><div class="cta">${esc(p.cta)}</div>` : ''}
       <div class="label">话题标签</div>
       <div class="tags">${p.tags.map((t) => `<span>${esc(t)}</span>`).join('')}</div>
+      <div class="label">封面</div>
+      <div class="cover-row">
+        <button class="cover-thumb" type="button" data-act="cover" data-i="${i}" aria-label="编辑第 ${i + 1} 篇封面">${thumb ? `<img src="${thumb}" alt="封面预览" />` : '🎨'}</button>
+        <div class="cover-texts">
+          ${coversOf(p).map((c) => `<div class="cover-text"><b>${esc(c.main)}</b><span>${esc(c.sub)}</span></div>`).join('')}
+          <div><button class="btn primary sm" type="button" data-act="cover" data-i="${i}">🎨 生成 / 下载封面</button></div>
+        </div>
+      </div>
+      ${extrasHTML(p, i)}
       <div class="post-foot">正文 ${textLen(p.body)} 字</div>
     </article>`;
   }
@@ -428,7 +566,9 @@
   }
   function renderMeta() {
     const ok = current.posts.filter((p) => p && !p.error).length;
-    el.resultMeta.textContent = `· ${current.input.topic} · ${TONE_NAMES[current.input.tone]} · ${current.mode === 'ai' ? 'AI' : '模板'} · ${ok} 篇`;
+    const ind = INDUSTRIES[current.input.industry];
+    const indName = ind && current.input.industry !== 'general' ? ` · ${ind.name}` : '';
+    el.resultMeta.textContent = `· ${current.input.topic}${indName} · ${TONE_NAMES[current.input.tone]} · ${current.mode === 'ai' ? 'AI' : '模板'} · ${ok} 篇`;
     const has = ok > 0;
     [el.btnCopyAll, el.btnCsv, el.btnTxt].forEach((b) => { b.disabled = !has; });
   }
@@ -442,10 +582,13 @@
     if (t) { copyText(t.dataset.copyTitle); return; }
     const b = e.target.closest('button[data-act]');
     if (!b || !current) return;
-    const p = current.posts[Number(b.dataset.i)];
+    const i = Number(b.dataset.i);
+    const p = current.posts[i];
     if (!p || p.error) return;
     if (b.dataset.act === 'copy') copyText(postCopyText(p));
     if (b.dataset.act === 'copy-body') copyText([p.body, '', p.cta, '', p.tags.join(' ')].join('\n'));
+    if (b.dataset.act === 'copy-prompt') copyText(p.imagePrompts[Number(b.dataset.j)][b.dataset.lang]);
+    if (b.dataset.act === 'cover') openCover(i);
   });
 
   function setProgress(done, total, extra = '') {
@@ -454,10 +597,112 @@
     el.progressText.textContent = `已完成 ${done}/${total} 篇${extra ? ' · ' + extra : ''}`;
   }
 
+  // ================= 封面编辑器 =================
+  // 每篇的封面样式（含本地照片）只放在内存里，不写入 localStorage
+  const coverStyles = new WeakMap();
+  let coverIdx = -1;
+  const cv = {
+    dlg: $('coverDlg'), img: $('coverImg'), title: $('coverTitle'), sets: $('coverSets'),
+    main: $('coverMain'), sub: $('coverSub'), tag: $('coverTag'),
+    palettes: $('coverPalettes'), layouts: $('coverLayouts'),
+    file: $('coverFile'), clear: $('btnClearPhoto'), ctrls: $('photoCtrls'),
+    zoom: $('photoZoom'), x: $('photoX'), y: $('photoY'),
+  };
+  cv.palettes.innerHTML = Object.entries(window.XHSCover.PALETTES)
+    .map(([id, p]) => `<button type="button" class="swatch" data-palette="${id}"><i style="background:linear-gradient(135deg,${p.bg[0]},${p.bg[1]})"></i>${p.name}</button>`).join('');
+  cv.layouts.innerHTML = Object.entries(window.XHSCover.LAYOUTS)
+    .map(([id, name]) => `<button type="button" class="opt" data-layout="${id}">${name}</button>`).join('');
+
+  function curStyle() {
+    const p = current.posts[coverIdx];
+    if (!coverStyles.has(p)) coverStyles.set(p, { ...coverDefaults(coverIdx), set: 0 });
+    return coverStyles.get(p);
+  }
+  function coverOpts() {
+    const st = curStyle();
+    return {
+      main: cv.main.value.trim() || ' ', sub: cv.sub.value.trim(), tag: cv.tag.value.trim(),
+      palette: st.palette, layout: st.layout, photo: st.photo, zoom: st.zoom, posX: st.posX, posY: st.posY,
+    };
+  }
+  let renderTimer;
+  function drawCover() {
+    clearTimeout(renderTimer);
+    renderTimer = setTimeout(() => {
+      const st = curStyle();
+      Object.assign(st, { main: cv.main.value, sub: cv.sub.value, tag: cv.tag.value });
+      cv.img.src = window.XHSCover.toDataURL(coverOpts(), 1);
+      cv.palettes.querySelectorAll('.swatch').forEach((b) => b.classList.toggle('active', b.dataset.palette === st.palette));
+      cv.layouts.querySelectorAll('.opt').forEach((b) => b.classList.toggle('active', b.dataset.layout === st.layout));
+      cv.sets.querySelectorAll('.cover-set').forEach((b) => b.classList.toggle('active', Number(b.dataset.set) === st.set));
+      cv.clear.hidden = !st.photo;
+      cv.ctrls.hidden = !st.photo;
+    }, 60);
+  }
+  function openCover(i) {
+    coverIdx = i;
+    const p = current.posts[i];
+    const st = curStyle();
+    const covers = coversOf(p);
+    const c = covers[st.set] || covers[0];
+    cv.title.textContent = `· 第 ${i + 1} 篇`;
+    cv.sets.innerHTML = covers.map((x, j) => `<button type="button" class="cover-set" data-set="${j}"><b>${esc(x.main)}</b><small>${esc(x.sub)}</small></button>`).join('');
+    cv.main.value = st.main ?? c.main;
+    cv.sub.value = st.sub ?? c.sub;
+    cv.tag.value = st.tag ?? '';
+    cv.zoom.value = Math.round((st.zoom || 1) * 100);
+    cv.x.value = Math.round((st.posX ?? 0.5) * 100);
+    cv.y.value = Math.round((st.posY ?? 0.5) * 100);
+    cv.file.value = '';
+    drawCover();
+    cv.dlg.showModal();
+  }
+  cv.sets.addEventListener('click', (e) => {
+    const b = e.target.closest('.cover-set');
+    if (!b) return;
+    const st = curStyle();
+    st.set = Number(b.dataset.set);
+    const c = coversOf(current.posts[coverIdx])[st.set];
+    cv.main.value = c.main; cv.sub.value = c.sub;
+    drawCover();
+  });
+  cv.palettes.addEventListener('click', (e) => { const b = e.target.closest('[data-palette]'); if (b) { curStyle().palette = b.dataset.palette; drawCover(); } });
+  cv.layouts.addEventListener('click', (e) => { const b = e.target.closest('[data-layout]'); if (b) { curStyle().layout = b.dataset.layout; drawCover(); } });
+  [cv.main, cv.sub, cv.tag].forEach((x) => x.addEventListener('input', drawCover));
+  cv.zoom.addEventListener('input', () => { curStyle().zoom = cv.zoom.value / 100; drawCover(); });
+  cv.x.addEventListener('input', () => { curStyle().posX = cv.x.value / 100; drawCover(); });
+  cv.y.addEventListener('input', () => { curStyle().posY = cv.y.value / 100; drawCover(); });
+  cv.file.addEventListener('change', async () => {
+    const f = cv.file.files[0];
+    if (!f) return;
+    try {
+      const img = await window.XHSCover.loadImageFile(f);
+      Object.assign(curStyle(), { photo: img, zoom: 1, posX: 0.5, posY: 0.5 });
+      cv.zoom.value = 100; cv.x.value = 50; cv.y.value = 50;
+      drawCover();
+    } catch (err) { toast(err.message); }
+  });
+  cv.clear.addEventListener('click', () => { const st = curStyle(); delete st.photo; cv.file.value = ''; drawCover(); });
+  $('btnDownloadCover').addEventListener('click', async () => {
+    const blob = await window.XHSCover.toBlob(coverOpts());
+    if (!blob) { toast('封面生成失败'); return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `xhs-cover_${coverIdx + 1}_${curStyle().layout}.png`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    toast('✅ 封面已下载');
+  });
+  $('btnCloseCover').addEventListener('click', () => cv.dlg.close());
+  cv.dlg.addEventListener('click', (e) => { if (e.target === cv.dlg) cv.dlg.close(); });
+  cv.dlg.addEventListener('close', () => { if (current && coverIdx >= 0) renderOne(coverIdx); });
+
   // ================= 生成 =================
   function readInput() {
     if (el.kwInput.value.trim()) { addKeywords(el.kwInput.value); el.kwInput.value = ''; }
     return {
+      industry: el.industry.value,
+      sub: el.sub.value,
       topic: el.topic.value.trim(),
       audience: el.audience.value.trim(),
       keywords: keywords.slice(),
@@ -576,16 +821,22 @@
     return '"' + s.replace(/"/g, '""') + '"';
   }
   el.btnCsv.addEventListener('click', () => {
-    const rows = [['序号', '标题1', '标题2', '标题3', '正文', '互动引导', '话题标签', '主题', '目标人群', '关键词', '语气风格']];
+    const rows = [['序号', '标题1', '标题2', '标题3', '正文', '互动引导', '话题标签', '封面大字', '建议拍摄', 'AI生图提示词(中文)', 'AI生图提示词(英文)', '行业', '细分', '主题', '目标人群', '关键词', '语气风格']];
+    const ind = INDUSTRIES[current.input.industry] || INDUSTRIES.general;
     validPosts().forEach((p, i) => rows.push([
       i + 1, p.titles[0] || '', p.titles[1] || '', p.titles[2] || '', p.body, p.cta, p.tags.join(' '),
-      current.input.topic, current.input.audience, current.input.keywords.join('、'), TONE_NAMES[current.input.tone],
+      coversOf(p).map((c) => `${c.main}｜${c.sub}`).join('\n'),
+      (p.shots || []).map((x, j) => `${j + 1}. ${x}`).join('\n'),
+      (p.imagePrompts || []).map((x) => x.zh).join('\n'),
+      (p.imagePrompts || []).map((x) => x.en).join('\n'),
+      ind.name, p.sub || '', current.input.topic, current.input.audience, current.input.keywords.join('、'), TONE_NAMES[current.input.tone],
     ]));
     const csv = '﻿' + rows.map((r) => r.map(csvCell).join(',')).join('\r\n'); // BOM：Excel 打开不乱码
     download(fileBase() + '.csv', csv, 'text/csv;charset=utf-8');
   });
   function allText() {
     const head = [
+      `行业：${(INDUSTRIES[current.input.industry] || INDUSTRIES.general).name}`,
       `主题：${current.input.topic}`,
       `目标人群：${current.input.audience || '不限'}`,
       `关键词：${current.input.keywords.join('、') || '无'}`,
@@ -620,7 +871,7 @@
       <div class="h-item">
         <div class="h-info">
           <div class="h-title">${esc(h.input.topic)}</div>
-          <div class="h-meta">${fmtTime(h.time)} · ${TONE_NAMES[h.input.tone] || ''} · ${h.mode === 'ai' ? 'AI' : '模板'} · ${h.posts.length} 篇${h.input.keywords?.length ? ' · ' + esc(h.input.keywords.join('、')) : ''}</div>
+          <div class="h-meta">${fmtTime(h.time)}${h.input.industry && h.input.industry !== 'general' && INDUSTRIES[h.input.industry] ? ' · ' + esc(INDUSTRIES[h.input.industry].name) : ''} · ${TONE_NAMES[h.input.tone] || ''} · ${h.mode === 'ai' ? 'AI' : '模板'} · ${h.posts.length} 篇${h.input.keywords?.length ? ' · ' + esc(h.input.keywords.join('、')) : ''}</div>
         </div>
         <div class="h-actions">
           <button class="btn primary sm" type="button" data-h-view="${esc(h.id)}">查看</button>
@@ -657,6 +908,8 @@
   [el.historyDlg, el.settingsDlg].forEach((dlg) => dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); }));
 
   function fillForm(input) {
+    el.industry.value = INDUSTRIES[input.industry] ? input.industry : 'general';
+    updateSubs(input.sub);
     el.topic.value = input.topic || '';
     el.audience.value = input.audience || '';
     keywords = (input.keywords || []).slice();
@@ -667,6 +920,7 @@
   }
 
   // ================= 初始化 =================
+  updateSubs();
   const last = store.json(LS.lastInput, null);
   if (last) fillForm(last);
   updateModeHint();

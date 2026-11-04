@@ -15,7 +15,7 @@
       <span class="logo">红</span>
       <div>
         <h1>小红书文案批量生成器</h1>
-        <p class="sub">标题 · 正文 · 互动引导 · 话题标签，一次生成多篇</p>
+        <p class="sub">标题 · 正文 · 话题标签 · 封面图 · 配图建议，一次生成多篇</p>
       </div>
     </div>
     <nav class="top-actions">
@@ -29,6 +29,17 @@
     <section class="card input-card" aria-labelledby="inputTitle">
       <h2 id="inputTitle">📝 填写需求</h2>
       <form id="genForm" autocomplete="off">
+        <div class="field two-col">
+          <label>
+            <span>行业</span>
+            <select id="industry"></select>
+          </label>
+          <label id="subWrap" hidden>
+            <span>细分方向</span>
+            <select id="sub"></select>
+          </label>
+        </div>
+
         <label class="field">
           <span>主题 / 产品 <em>*</em></span>
           <input id="topic" type="text" maxlength="60" required placeholder="如：潜水面镜怎么选、衣帽间铝制侧拉门" />
@@ -72,6 +83,7 @@
             <label><input type="radio" name="mode" value="ai" /><span>✨ AI 模式<small>Claude · 需 API Key</small></span></label>
           </div>
           <p class="hint" id="modeHint"></p>
+          <p class="hint" id="industryHint"></p>
         </div>
 
         <div class="form-actions">
@@ -178,9 +190,69 @@
     </div>
   </dialog>
 
+  <!-- 封面弹窗 -->
+  <dialog id="coverDlg" class="dlg wide cover-dlg">
+    <div class="dlg-inner">
+      <div class="dlg-head">
+        <h3>🎨 小红书封面 <small id="coverTitle"></small></h3>
+        <button class="icon-btn" type="button" id="btnCloseCover" aria-label="关闭">✕</button>
+      </div>
+      <div class="cover-layout">
+        <div class="cover-preview">
+          <img id="coverImg" alt="封面预览" />
+          <p class="hint center">1080×1440（3:4 竖版）· 手机可长按图片保存</p>
+        </div>
+        <div class="cover-controls">
+          <div class="field">
+            <span>封面大字（点选一组，也可以直接改）</span>
+            <div id="coverSets" class="cover-sets"></div>
+          </div>
+          <label class="field">
+            <span>主标题 <small class="muted">回车可手动换行</small></span>
+            <textarea id="coverMain" rows="2" maxlength="24"></textarea>
+          </label>
+          <label class="field">
+            <span>副标题</span>
+            <input id="coverSub" type="text" maxlength="24" />
+          </label>
+          <label class="field">
+            <span>角标（可留空）</span>
+            <input id="coverTag" type="text" maxlength="12" placeholder="如 #门窗" />
+          </label>
+          <div class="field">
+            <span>配色</span>
+            <div id="coverPalettes" class="swatches"></div>
+          </div>
+          <div class="field">
+            <span>排版</span>
+            <div id="coverLayouts" class="opt-row"></div>
+          </div>
+          <div class="field">
+            <span>背景照片</span>
+            <div class="opt-row">
+              <label class="btn ghost sm file-btn">📷 上传照片<input id="coverFile" type="file" accept="image/*" /></label>
+              <button class="btn ghost sm" type="button" id="btnClearPhoto" hidden>移除照片</button>
+            </div>
+            <div id="photoCtrls" class="photo-ctrls" hidden>
+              <label>缩放 <input id="photoZoom" type="range" min="100" max="250" value="100" /></label>
+              <label>左右 <input id="photoX" type="range" min="0" max="100" value="50" /></label>
+              <label>上下 <input id="photoY" type="range" min="0" max="100" value="50" /></label>
+            </div>
+            <p class="hint">🔒 照片只在你的浏览器里处理，不会上传到任何地方。</p>
+          </div>
+          <div class="dlg-actions">
+            <button class="btn primary" type="button" id="btnDownloadCover">⬇️ 下载 PNG</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <script src="industries.js"></script>
   <script src="templates.js"></script>
+  <script src="cover.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

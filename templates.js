@@ -168,12 +168,7 @@
     return a;
   }
   function fill(tpl, ctx) {
-    return tpl
-      .replace(/\{t\}/g, ctx.t)
-      .replace(/\{p\}/g, ctx.p)
-      .replace(/\{k2\}/g, ctx.k2)
-      .replace(/\{k\}/g, ctx.k)
-      .replace(/\{n\}/g, ctx.n);
+    return tpl.replace(/\{(t|p|k2|k|n|s|c|term)\}/g, (m, key) => (ctx[key] !== undefined && ctx[key] !== '' ? String(ctx[key]) : m === '{k}' || m === '{k2}' ? ctx.t : ''));
   }
   function cleanTag(s) {
     return String(s).replace(/[#\s，,。.!！?？、|｜]/g, '').slice(0, 20);
@@ -186,7 +181,7 @@
     for (const f of formulas) {
       if (out.length >= 3) break;
       const k = keywords.length ? pick(keywords) : ctx.t;
-      const title = fill(f, { ...ctx, k, n: pick([3, 5, 6, 7, 8, 10]) });
+      const title = fill(f, { ...ctx, k, n: ctx.n || pick([3, 5, 6, 7, 8, 10]) });
       if (len(title) <= 20 && !seen.has(title)) { seen.add(title); out.push(title); }
     }
     // 主题太长时兜底：截短主题再套简单公式
@@ -219,7 +214,7 @@
     while (len(build()) > 600 && paras.length > 2) paras.pop();
     // 重新编号
     for (let j = 0; j < paras.length; j++) paras[j] = paras[j].replace(/^\S+\s/, `${EMOJI_NUMS[j]} `);
-    return build();
+    return { text: build(), count: paras.length };
   }
 
   function makeTags(tone, ctx, keywords) {
@@ -235,11 +230,20 @@
     return tags.slice(0, 10).map((t) => '#' + t);
   }
 
-  /**
-   * 生成一篇文案
-   * @param {{topic:string, audience:string, keywords:string[], tone:string}} input
-   */
-  function generateOne(input) {
+  // ======================= 通用（原有模板） =======================
+  const GENERAL_COVER_MAIN = ['{k}怎么选', '{k}避坑指南', '关于{k}', '{k}全攻略', '{k}真实体验', '{k}必看'];
+  const GENERAL_COVER_SUB = {
+    ganhuo: ['{n}个要点一次讲清', '新手也能看懂', '建议先收藏'],
+    zhongcao: ['用了就回不去', '真心推荐不踩雷', '闭眼入的理由'],
+    bikeng: ['{n}个坑千万别踩', '花钱买来的教训', '看完再下单'],
+    tiyan: ['真实体验不吹不黑', '用了几个月的感受', '优缺点都说'],
+  };
+  const GENERAL_SHOTS = [
+    '主体正面清晰照（靠窗自然光，干净背景）', '真实使用场景照（真人上手，可不露脸）', '细节特写（材质、做工、纹理）',
+    '使用前后对比图（同角度）', '多款对比平铺图', '手写笔记 / 清单图（适合干货篇）', '包装或配件全家福',
+  ];
+
+  function generateGeneral(input) {
     const tone = TITLE_FORMULAS[input.tone] ? input.tone : 'ganhuo';
     const ctx = {
       t: input.topic.trim(),
@@ -248,12 +252,155 @@
       k: '', k2: '', n: 3,
     };
     const keywords = (input.keywords || []).map((k) => k.trim()).filter(Boolean);
+    const shortT = Array.from(ctx.t).slice(0, 8).join('');
+    const body = makeBody(tone, ctx, keywords);
+    ctx.n = body.count; // 标题里的“N 个”与正文要点数一致
+    const covers = makeCovers(GENERAL_COVER_MAIN, GENERAL_COVER_SUB[tone], () => ({ ...ctx, k: keywords.length && Math.random() < 0.4 ? pick(keywords) : shortT }));
+    const kwText = keywords.length ? keywords.join('、') : '';
     return {
       titles: makeTitles(tone, ctx, keywords),
-      body: makeBody(tone, ctx, keywords),
+      body: body.text,
       cta: fill(pick(CTAS[tone]), { ...ctx, k: keywords[0] || ctx.t }),
       tags: makeTags(tone, ctx, keywords),
+      covers,
+      shots: shuffle(GENERAL_SHOTS).slice(0, 5),
+      imagePrompts: [
+        {
+          zh: `${ctx.t}主题的生活方式照片${kwText ? '，突出' + kwText : ''}，干净明亮的居家场景` + PROMPT_SUFFIX().zh,
+          en: `lifestyle photo for a social media post about "${ctx.t}"${kwText ? ' (' + kwText + ')' : ''}, clean bright home setting, aesthetic styling` + PROMPT_SUFFIX().en,
+        },
+        {
+          zh: `${ctx.t}相关物品的俯拍平铺构图，浅色桌面，留白，简约高级` + PROMPT_SUFFIX().zh,
+          en: `flat lay of items related to "${ctx.t}", light tabletop, negative space, minimal premium look` + PROMPT_SUFFIX().en,
+        },
+      ],
     };
+  }
+
+  // ======================= 行业模板 =======================
+  const IND = () => (window.XHSIndustries || {}).INDUSTRIES || {};
+  const PROMPT_SUFFIX = () => (window.XHSIndustries || {}).PROMPT_SUFFIX || { zh: '', en: '' };
+  const CITIES = () => (window.XHSIndustries || {}).LA_CITIES || ['洛杉矶'];
+
+  /** 从主公式和副公式组合 2-3 组封面大字：主标题 ≤10 字、副标题 ≤14 字 */
+  function makeCovers(mainF, subF, ctxFn) {
+    const out = [];
+    const seen = new Set();
+    const mains = shuffle(mainF);
+    const subs = shuffle(subF);
+    for (let i = 0; i < mains.length && out.length < 3; i++) {
+      const ctx = ctxFn();
+      const main = fill(mains[i], ctx);
+      const sub = fill(subs[i % subs.length], ctx);
+      if (len(main) <= 10 && len(sub) <= 14 && !seen.has(main)) { seen.add(main); out.push({ main, sub }); }
+    }
+    if (out.length < 2) out.push({ main: Array.from(ctxFn().t).slice(0, 10).join(''), sub: '一篇讲清楚' });
+    return out;
+  }
+
+  function industryTitles(ind, sub, tone, ctxFn) {
+    const formulas = shuffle([...(sub.titles || []), ...(ind.titles[tone] || [])]);
+    const out = [];
+    const seen = new Set();
+    for (const f of formulas) {
+      if (out.length >= 3) break;
+      const title = fill(f, ctxFn());
+      if (len(title) <= 20 && !seen.has(title)) { seen.add(title); out.push(title); }
+    }
+    return out;
+  }
+
+  /** 按语气挑段落：干货=知识点，种草=亮点+知识，避坑=坑点，体验=亮点+坑点+知识 */
+  function paragraphPool(ind, sub, tone) {
+    const c = ind.common || {};
+    const S = (a) => shuffle(a || []);
+    let main;
+    switch (tone) {
+      case 'zhongcao': main = [...S(sub.highlights).slice(0, 2), ...S(sub.facts), ...S(c.highlights)]; break;
+      case 'bikeng': main = [...S(sub.pitfalls), ...S(c.pitfalls), ...S(sub.facts).slice(0, 1)]; break;
+      case 'tiyan': main = [...S(sub.highlights).slice(0, 1), ...S(sub.pitfalls).slice(0, 1), ...S(sub.facts), ...S(c.facts).slice(0, 1)]; break;
+      default: main = [...S(sub.facts), ...S(c.facts)];
+    }
+    // 素材不够长时，用本细分的其他段落补足
+    const rest = [...S(sub.facts), ...S(sub.pitfalls), ...S(sub.highlights), ...S(c.facts)].filter((p) => !main.includes(p));
+    return [...main, ...rest];
+  }
+
+  function industryBody(ind, sub, tone, ctx, userKws) {
+    const openers = (sub.openers && sub.openers[tone]) || ind.openers[tone];
+    const opener = fill(pick(openers), ctx);
+    const summary = fill(pick(ind.summaries[tone]), ctx);
+    const kwLine = userKws.length ? `🔑 本篇关键词：${userKws.join(' / ')}，咨询或下单时可以直接拿这些词去问。` : '';
+    const pool = paragraphPool(ind, sub, tone);
+    const paras = [];
+    const build = () => [opener, ...paras.map((p, i) => `${EMOJI_NUMS[i]} ${p}`), kwLine, summary].filter(Boolean).join('\n\n');
+    for (const raw of pool) {
+      const p = fill(raw, ctx);
+      if (paras.includes(p)) continue;
+      paras.push(p);
+      if (paras.length >= 2 && len(build()) >= 340) break;
+      if (paras.length >= 5) break;
+    }
+    while (len(build()) > 600 && paras.length > 2) paras.pop();
+    return { text: build(), count: paras.length };
+  }
+
+  function generateIndustry(input, ind) {
+    const tone = ind.titles[input.tone] ? input.tone : 'ganhuo';
+    const sub = (input.sub && ind.subs.find((s) => s.id === input.sub)) || pick(ind.subs);
+    const userKws = (input.keywords || []).map((k) => k.trim()).filter(Boolean);
+    const shortTerms = sub.terms.filter((t) => len(t) <= 6);
+    const city = pick(CITIES());
+    const base = {
+      t: input.topic.trim(),
+      p: (input.audience || '').trim() || ind.defaultAudience || '大家',
+      s: sub.short || sub.name,
+      c: city,
+    };
+    const ctxFn = () => {
+      const term = pick(shortTerms.length ? shortTerms : sub.terms);
+      const k = userKws.length && Math.random() < 0.5 ? pick(userKws) : term;
+      return { ...base, term, k, k2: pick(sub.terms), n: base.n || 3 };
+    };
+    const ctx = ctxFn();
+    const body = industryBody(ind, sub, tone, ctx, userKws);
+    base.n = body.count; // 标题/封面里的“N 个”与正文要点数一致
+
+    let titles = industryTitles(ind, sub, tone, ctxFn);
+    if (titles.length < 3) {
+      const extra = makeTitles(tone, base, userKws.length ? userKws : shortTerms).filter((t) => !titles.includes(t));
+      titles = titles.concat(extra).slice(0, 3);
+    }
+
+    const tags = [];
+    const addTag = (s) => { const c = cleanTag(s); if (c && !tags.includes(c)) tags.push(c); };
+    if (len(base.t) <= 12) addTag(base.t);
+    userKws.forEach(addTag);
+    shuffle(sub.tags || []).slice(0, 3).forEach(addTag);
+    shuffle(ind.tags || []).slice(0, 3).forEach(addTag);
+    shuffle(GENERIC_TAGS[tone]).forEach((t) => { if (tags.length < 9) addTag(t); });
+
+    const sfx = PROMPT_SUFFIX();
+    return {
+      titles,
+      body: body.text,
+      cta: fill(pick(ind.ctas), ctx),
+      tags: tags.slice(0, 10).map((t) => '#' + t),
+      covers: makeCovers(sub.coverMain || ind.coverMain, sub.coverSub || ind.coverSub, ctxFn),
+      shots: shuffle(sub.shots).slice(0, Math.min(sub.shots.length, 5)),
+      imagePrompts: (sub.scenes || []).map((sc) => ({ zh: sc.zh + sfx.zh, en: sc.en + sfx.en })),
+      sub: sub.name,
+    };
+  }
+
+  /**
+   * 生成一篇文案
+   * @param {{topic:string, audience:string, keywords:string[], tone:string, industry?:string, sub?:string}} input
+   */
+  function generateOne(input) {
+    const ind = IND()[input.industry];
+    if (ind && ind.subs && ind.subs.length) return generateIndustry(input, ind);
+    return generateGeneral(input);
   }
 
   /** 批量生成，尽量让每篇的标题不重复 */
@@ -262,7 +409,7 @@
     const usedTitles = new Set();
     for (let i = 0; i < count; i++) {
       let post = generateOne(input);
-      for (let tries = 0; tries < 5 && post.titles.some((t) => usedTitles.has(t)); tries++) {
+      for (let tries = 0; tries < 6 && post.titles.some((t) => usedTitles.has(t)); tries++) {
         post = generateOne(input);
       }
       post.titles.forEach((t) => usedTitles.add(t));
@@ -271,5 +418,12 @@
     return posts;
   }
 
-  window.XHSTemplates = { generateOne, generateBatch, textLength: len };
+  /** 旧历史记录没有封面大字时，用标题兜底 */
+  function coverFallback(post) {
+    const t = (post.titles && post.titles[0]) || '小红书笔记';
+    const clean = t.replace(/[｜|].*$/, '');
+    return [{ main: Array.from(clean).slice(0, 10).join(''), sub: Array.from((post.titles && post.titles[1]) || '').slice(0, 14).join('') }];
+  }
+
+  window.XHSTemplates = { generateOne, generateBatch, coverFallback, textLength: len };
 })();
