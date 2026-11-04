@@ -12,6 +12,7 @@
   const PRESETS = window.XHSPresets || { general: { name: '通用', desc: '', system: '', audience: '', keywords: [], tags: [], checks: [] } };
   const presetOf = (id) => PRESETS[id] || PRESETS.general;
   const MAX_HISTORY = 50;
+  const MODE_NAMES = { ai: 'AI', template: '模板', import: '导入' };
   const TONE_NAMES = { ganhuo: '干货科普', zhongcao: '种草分享', bikeng: '避坑提醒', tiyan: '真实体验' };
   const MODEL_NAMES = {
     'claude-opus-5-5': 'Claude Opus 5.5',
@@ -530,7 +531,7 @@
   }
   function renderMeta() {
     const ok = current.posts.filter((p) => p && !p.error).length;
-    el.resultMeta.textContent = `· ${presetOf(current.input.preset).name} · ${current.input.topic} · ${TONE_NAMES[current.input.tone]} · ${current.mode === 'ai' ? 'AI' : '模板'} · ${ok} 篇`;
+    el.resultMeta.textContent = `· ${presetOf(current.input.preset).name} · ${current.input.topic} · ${TONE_NAMES[current.input.tone]} · ${MODE_NAMES[current.mode] || '模板'} · ${ok} 篇`;
     const has = ok > 0;
     [el.btnCopyAll, el.btnCsv, el.btnTxt, el.btnJson].forEach((b) => { b.disabled = !has; });
   }
@@ -733,6 +734,70 @@
   el.btnTxt.addEventListener('click', () => download(fileBase() + '.txt', '﻿' + allText(), 'text/plain;charset=utf-8'));
   el.btnCopyAll.addEventListener('click', () => copyText(allText()));
 
+  // ================= 导入（Claude 对话里生成的 JSON，不需要 API Key） =================
+  const PRESET_BY_NAME = Object.fromEntries(Object.entries(PRESETS).map(([id, p]) => [p.name, id]));
+  function normTags(v) {
+    const arr = Array.isArray(v) ? v : String(v || '').split(/[\s,，]+/);
+    return arr.map((t) => String(t).trim().replace(/\s+/g, '')).filter(Boolean)
+      .map((t) => (t.startsWith('#') ? t : '#' + t)).slice(0, 10);
+  }
+  function importItem(o) {
+    const str = (v) => String(v ?? '').trim();
+    const titles = [o.title, ...(Array.isArray(o.alt_titles) ? o.alt_titles : []), ...(Array.isArray(o.titles) ? o.titles : [])]
+      .map(str).filter(Boolean);
+    const uniq = [...new Set(titles)].slice(0, 3);
+    const body = str(o.body);
+    if (!uniq.length || !body) return null;
+    let coverTitle = str(o.cover_title), coverSubtitle = str(o.cover_subtitle);
+    if (!coverTitle && o.cover_text) [coverTitle, coverSubtitle = ''] = str(o.cover_text).split(/\s*[\/｜|]\s*/);
+    const images = Array.isArray(o.image_notes) ? o.image_notes : (Array.isArray(o.images) ? o.images : []);
+    return {
+      titles: uniq, body, cta: str(o.cta), tags: normTags(o.hashtags || o.tags),
+      coverTitle: str(coverTitle), coverSubtitle: str(coverSubtitle), coverLayout: str(o.cover_layout),
+      images: images.map(str).filter(Boolean).slice(0, 9), pinned: str(o.pinned_comment || o.pinned),
+    };
+  }
+  function doImport(raw) {
+    let data;
+    try {
+      const txt = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+      data = JSON.parse(txt);
+    } catch { throw new Error('不是有效的 JSON，请整段复制（从 [ 到 ]）再粘贴'); }
+    if (!Array.isArray(data)) data = Array.isArray(data?.posts) ? data.posts : [data];
+    const posts = data.map(importItem).filter(Boolean);
+    if (!posts.length) throw new Error('没有找到可用的笔记（每篇至少要有 title 和 body）');
+    const presetId = PRESET_BY_NAME[String(data[0]?.industry || '').trim()] || getPreset();
+    current = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      time: Date.now(), mode: 'import', model: null,
+      input: { topic: String(data[0]?.topic || posts[0].titles[0]).slice(0, 60), audience: '', keywords: [], tone: getTone(), count: posts.length, preset: presetId },
+      posts,
+    };
+    el.progress.hidden = true;
+    renderResults();
+    saveHistory(current);
+    return posts.length;
+  }
+  $('btnImport').addEventListener('click', () => { $('importMsg').textContent = ''; $('importDlg').showModal(); });
+  $('btnCloseImport').addEventListener('click', () => $('importDlg').close());
+  $('importFile').addEventListener('change', async (e) => {
+    const f = e.target.files?.[0];
+    if (f) $('importText').value = await f.text();
+    e.target.value = '';
+  });
+  $('btnDoImport').addEventListener('click', () => {
+    if (abortCtrl) { toast('请先停止当前生成'); return; }
+    try {
+      const n = doImport($('importText').value);
+      $('importDlg').close();
+      $('importText').value = '';
+      toast(`✅ 已导入 ${n} 篇`);
+      scrollToResults();
+    } catch (err) {
+      $('importMsg').textContent = '❌ ' + err.message;
+    }
+  });
+
   // ================= 历史记录 =================
   function loadHistory() { return store.json(LS.history, []); }
   function saveHistory(batch) {
@@ -755,7 +820,7 @@
       <div class="h-item">
         <div class="h-info">
           <div class="h-title">${esc(h.input.topic)}</div>
-          <div class="h-meta">${fmtTime(h.time)} · ${esc(presetOf(h.input.preset).name)} · ${TONE_NAMES[h.input.tone] || ''} · ${h.mode === 'ai' ? 'AI' : '模板'} · ${h.posts.length} 篇${h.input.keywords?.length ? ' · ' + esc(h.input.keywords.join('、')) : ''}</div>
+          <div class="h-meta">${fmtTime(h.time)} · ${esc(presetOf(h.input.preset).name)} · ${TONE_NAMES[h.input.tone] || ''} · ${MODE_NAMES[h.mode] || '模板'} · ${h.posts.length} 篇${h.input.keywords?.length ? ' · ' + esc(h.input.keywords.join('、')) : ''}</div>
         </div>
         <div class="h-actions">
           <button class="btn primary sm" type="button" data-h-view="${esc(h.id)}">查看</button>
@@ -789,7 +854,7 @@
     }
   });
   // 点击弹窗外部关闭
-  [el.historyDlg, el.settingsDlg].forEach((dlg) => dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); }));
+  [el.historyDlg, el.settingsDlg, $('importDlg')].forEach((dlg) => dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); }));
 
   function fillForm(input) {
     el.topic.value = input.topic || '';

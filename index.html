@@ -100,6 +100,7 @@
           <button class="btn ghost sm" id="btnCsv" type="button" disabled>⬇️ CSV</button>
           <button class="btn ghost sm" id="btnTxt" type="button" disabled>⬇️ TXT</button>
           <button class="btn ghost sm" id="btnJson" type="button" disabled>⬇️ JSON</button>
+          <button class="btn ghost sm" id="btnImport" type="button">⬆️ 导入</button>
         </div>
       </div>
 
@@ -186,6 +187,24 @@
         </div>
       </div>
       <div id="historyList" class="history-list"></div>
+    </div>
+  </dialog>
+
+  <!-- 导入弹窗：把 Claude 对话里生成的 JSON 粘贴进来，不需要 API Key -->
+  <dialog id="importDlg" class="dlg wide">
+    <div class="dlg-inner">
+      <div class="dlg-head">
+        <h3>⬆️ 导入笔记</h3>
+        <button class="icon-btn" type="button" id="btnCloseImport" aria-label="关闭">✕</button>
+      </div>
+      <p class="hint" style="margin-top:0">在 Claude 对话里让「小红书内容助手」输出 JSON，把整段粘贴到下面，或者选择 .json 文件。不调用 API，不需要 Key。</p>
+      <textarea id="importText" rows="10" placeholder='[{"title":"…","body":"…","hashtags":["#…"]}]'></textarea>
+      <div class="dlg-actions">
+        <label class="btn ghost" for="importFile">选择文件</label>
+        <input id="importFile" type="file" accept=".json,application/json,text/plain" hidden />
+        <button class="btn primary" type="button" id="btnDoImport">导入</button>
+      </div>
+      <p class="hint" id="importMsg"></p>
     </div>
   </dialog>
 
