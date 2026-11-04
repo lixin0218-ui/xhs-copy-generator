@@ -29,9 +29,19 @@
     <section class="card input-card" aria-labelledby="inputTitle">
       <h2 id="inputTitle">📝 填写需求</h2>
       <form id="genForm" autocomplete="off">
+        <div class="field">
+          <span>账号人设</span>
+          <div class="seg three" id="presetSeg" role="radiogroup">
+            <label><input type="radio" name="preset" value="general" checked /><span>🍠 通用</span></label>
+            <label><input type="radio" name="preset" value="doors" /><span>🚪 选门新号</span></label>
+            <label><input type="radio" name="preset" value="diving" /><span>🤿 潜水老号</span></label>
+          </div>
+          <p class="hint" id="presetHint"></p>
+        </div>
+
         <label class="field">
           <span>主题 / 产品 <em>*</em></span>
-          <input id="topic" type="text" maxlength="60" required placeholder="如：潜水面镜怎么选、衣帽间铝制侧拉门" />
+          <input id="topic" type="text" maxlength="60" required placeholder="如：潜水面镜怎么选、入户门怎么选" />
         </label>
 
         <label class="field">
@@ -89,6 +99,7 @@
           <button class="btn ghost sm" id="btnCopyAll" type="button" disabled>📋 复制全部</button>
           <button class="btn ghost sm" id="btnCsv" type="button" disabled>⬇️ CSV</button>
           <button class="btn ghost sm" id="btnTxt" type="button" disabled>⬇️ TXT</button>
+          <button class="btn ghost sm" id="btnJson" type="button" disabled>⬇️ JSON</button>
         </div>
       </div>
 
@@ -180,6 +191,7 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <script src="presets.js"></script>
   <script src="templates.js"></script>
   <script src="app.js"></script>
 </body>

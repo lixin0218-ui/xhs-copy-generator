@@ -9,6 +9,8 @@
     history: 'xhs_history',
     lastInput: 'xhs_last_input',
   };
+  const PRESETS = window.XHSPresets || { general: { name: '通用', desc: '', system: '', audience: '', keywords: [], tags: [], checks: [] } };
+  const presetOf = (id) => PRESETS[id] || PRESETS.general;
   const MAX_HISTORY = 50;
   const TONE_NAMES = { ganhuo: '干货科普', zhongcao: '种草分享', bikeng: '避坑提醒', tiyan: '真实体验' };
   const MODEL_NAMES = {
@@ -40,7 +42,8 @@
     modeHint: $('modeHint'), btnGenerate: $('btnGenerate'), btnStop: $('btnStop'),
     results: $('results'), resultMeta: $('resultMeta'),
     progress: $('progress'), progressFill: $('progressFill'), progressText: $('progressText'),
-    btnCopyAll: $('btnCopyAll'), btnCsv: $('btnCsv'), btnTxt: $('btnTxt'),
+    btnCopyAll: $('btnCopyAll'), btnCsv: $('btnCsv'), btnTxt: $('btnTxt'), btnJson: $('btnJson'),
+    presetHint: $('presetHint'),
     settingsDlg: $('settingsDlg'), apiKey: $('apiKey'), model: $('model'), concurrency: $('concurrency'),
     settingsMsg: $('settingsMsg'),
     historyDlg: $('historyDlg'), historyList: $('historyList'),
@@ -150,6 +153,24 @@
     }
   }
   el.form.addEventListener('change', (e) => { if (e.target.name === 'mode') updateModeHint(); });
+
+  // ================= 账号人设 =================
+  const getPreset = () => el.form.querySelector('input[name=preset]:checked')?.value || 'general';
+  function updatePresetHint() {
+    el.presetHint.textContent = presetOf(getPreset()).desc || '';
+  }
+  let lastPreset = 'general';
+  el.form.addEventListener('change', (e) => {
+    if (e.target.name !== 'preset') return;
+    const prev = presetOf(lastPreset);
+    const p = presetOf(e.target.value);
+    lastPreset = e.target.value;
+    // 空着的、或者还是上一个人设默认值的输入框才替换；用户自己写的内容不动
+    const aud = el.audience.value.trim();
+    if (!aud || aud === prev.audience) el.audience.value = p.audience || '';
+    if (!keywords.length || keywords.join('|') === prev.keywords.join('|')) { keywords = p.keywords.slice(); renderChips(); }
+    updatePresetHint();
+  });
   el.modeHint.addEventListener('click', (e) => {
     if (e.target.closest('[data-open-settings]')) { e.preventDefault(); openSettings(); }
   });
@@ -293,8 +314,13 @@
       body: { type: 'string', description: '正文' },
       cta: { type: 'string', description: '结尾互动引导' },
       tags: { type: 'array', items: { type: 'string' }, description: '5-10 个话题标签，以 # 开头' },
+      cover_title: { type: 'string', description: '封面主标题，不超过 10 个字' },
+      cover_subtitle: { type: 'string', description: '封面副标题，不超过 15 个字' },
+      cover_layout: { type: 'string', description: '封面构图建议，一句话' },
+      images: { type: 'array', items: { type: 'string' }, description: '6-9 张配图，每张写清拍什么、角度、图上加什么字' },
+      pinned_comment: { type: 'string', description: '评论区置顶回复' },
     },
-    required: ['titles', 'body', 'cta', 'tags'],
+    required: ['titles', 'body', 'cta', 'tags', 'cover_title', 'cover_subtitle', 'cover_layout', 'images', 'pinned_comment'],
     additionalProperties: false,
   };
 
@@ -306,6 +332,9 @@
 - body：正文 300-600 字。口语化、像真人在分享，分 4-7 段，段与段之间空一行；适当使用 emoji（每段 0-2 个，不要堆砌）；可以用 1️⃣2️⃣3️⃣ 或 ✅❌ 做小标题/要点；自然融入关键词。正文里不要写话题标签，也不要写结尾互动引导。
 - cta：1-2 句结尾互动引导，引导评论、点赞、收藏或关注，语气自然。
 - tags：5-10 个话题标签，每个以 # 开头、不含空格，包含主题词、关键词词、人群词和泛流量词。
+- cover_title / cover_subtitle：封面大字，主标题不超过 10 个字，副标题不超过 15 个字；cover_layout：一句话封面构图建议（比如“左右对比图：改造前 / 改造后”）。
+- images：6-9 条配图建议，每条写清楚拍什么、什么角度、图上加什么字，优先真人实拍，不要依赖网图。
+- pinned_comment：1-2 句评论区置顶回复，引导私信或评论，不留站外联系方式。
 - 遵守小红书社区规范：不使用"最""第一""100%"等绝对化用语，不做医疗/功效承诺，不出现微信号、价格引流、站外链接等内容。
 - 不要编造具体的品牌型号、价格、数据，除非用户提供。`;
 
@@ -346,7 +375,63 @@
       .slice(0, 10);
     const body = String(obj.body || '').trim();
     if (!titles.length || !body) throw new ApiError('返回内容不完整，正在重试', { retryable: true });
-    return { titles, body, cta: String(obj.cta || '').trim(), tags };
+    const str = (v) => String(v || '').trim();
+    return {
+      titles, body, cta: str(obj.cta), tags,
+      coverTitle: str(obj.cover_title),
+      coverSubtitle: str(obj.cover_subtitle),
+      coverLayout: str(obj.cover_layout),
+      images: (Array.isArray(obj.images) ? obj.images : []).map(str).filter(Boolean).slice(0, 9),
+      pinned: str(obj.pinned_comment),
+    };
+  }
+
+  function buildSystemPrompt(presetId) {
+    const add = presetOf(presetId).system;
+    return add ? `${SYSTEM_PROMPT}\n\n${add}` : SYSTEM_PROMPT;
+  }
+
+  // ================= 合规自检（本地规则，不调用 API） =================
+  const CHECK_RULES = {
+    base: [
+      { re: /最好|最佳|最强|最低价|最便宜|最优|最高级|最安全|第一(?![次步眼天篇个时周批件])|唯一|100%|百分之百|百分百|国家级|顶级|绝对|首选|万能|永久/g,
+        msg: (w) => `极限词「${w}」：《广告法》禁用，可换成“我个人更推荐”“用下来很稳”` },
+      { re: /微信|威信|[vV][xX]|\b[wW][xX]\b|加我|手机号|电话号码|\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b|https?:\/\/\S+|www\.\S+|[\w.-]+@[\w-]+\.[a-z]{2,}|\b[\w-]+\.(?:com|net|org|cn)\b/gi,
+        msg: (w) => `站外联系方式「${w}」：容易被判定导流限流，改成“私信我”` },
+    ],
+    license: [
+      { re: /持牌|有牌照|有执照|执照承包商|licensed(?:\s*contractor)?/gi,
+        msg: (w) => `「${w}」：目前没有加州承包商执照，不能写或暗示持牌` },
+    ],
+    install: [
+      { re: /我来装|我亲自(?:上门)?安装|我上门安装|我帮你装|我给你装/g,
+        msg: (w) => `「${w}」：改成“安排量尺和安装”，除非已确认安装方有 CSLB 执照` },
+    ],
+    partner: [
+      { re: /door\s*father|门教父/gi,
+        msg: (w) => `出现合作方品牌「${w}」：只推广自己的账号，改成“我们的合作伙伴”` },
+    ],
+    diving: [
+      { re: /不用考证|无需证书|不用证书|没证也能|无证潜水/g,
+        msg: (w) => `「${w}」：不符合 PADI 安全标准，不能鼓励无证或超资质潜水` },
+    ],
+  };
+
+  function checkPost(p, presetId) {
+    const text = [
+      ...(p.titles || []), p.body, p.cta, p.coverTitle, p.coverSubtitle, p.pinned,
+    ].filter(Boolean).join('\n');
+    const groups = ['base', ...(presetOf(presetId).checks || [])];
+    const out = new Set();
+    groups.forEach((g) => (CHECK_RULES[g] || []).forEach((rule) => {
+      (text.match(rule.re) || []).forEach((w) => out.add(rule.msg(w)));
+    }));
+    if (/\$\s?\d|\d+\s?(?:刀|美元|美金)/.test(text) && !/仅供参考/.test(text)) {
+      out.add('写了价格但没有“仅供参考，以实际报价为准”');
+    }
+    (p.titles || []).forEach((t) => { if (textLen(t) > 20) out.add(`标题超过 20 字：「${t}」`); });
+    if (p.coverTitle && textLen(p.coverTitle) > 10) out.add('封面主标题超过 10 个字');
+    return Array.from(out);
   }
 
   async function generateOneAI(input, index, total, signal) {
@@ -357,7 +442,7 @@
       try {
         const text = await callClaude({
           apiKey, model, signal,
-          system: SYSTEM_PROMPT,
+          system: buildSystemPrompt(input.preset),
           messages: [{ role: 'user', content: buildUserPrompt(input, index, total) }],
           maxTokens: 8000,
           effort: 'medium',
@@ -389,6 +474,10 @@
       p.cta,
       '',
       p.tags.join(' '),
+      ...(p.coverTitle ? ['', `封面：${p.coverTitle}${p.coverSubtitle ? ' / ' + p.coverSubtitle : ''}`] : []),
+      ...(p.coverLayout ? [`封面构图：${p.coverLayout}`] : []),
+      ...(p.images?.length ? ['', '配图清单：', ...p.images.map((s, j) => `${j + 1}. ${s}`)] : []),
+      ...(p.pinned ? ['', `置顶评论：${p.pinned}`] : []),
     ].join('\n');
   }
   function postCopyText(p) {
@@ -417,8 +506,21 @@
       ${p.cta ? `<div class="label">互动引导</div><div class="cta">${esc(p.cta)}</div>` : ''}
       <div class="label">话题标签</div>
       <div class="tags">${p.tags.map((t) => `<span>${esc(t)}</span>`).join('')}</div>
+      ${p.coverTitle ? `<div class="label">封面文案</div>
+      <div class="cover"><b>${esc(p.coverTitle)}</b>${p.coverSubtitle ? ` <span class="cover-sub">｜${esc(p.coverSubtitle)}</span>` : ''}
+        ${p.coverLayout ? `<div class="cover-layout">📐 ${esc(p.coverLayout)}</div>` : ''}</div>` : ''}
+      ${p.images?.length ? `<div class="label">配图清单（${p.images.length} 张）</div>
+      <ol class="images">${p.images.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>` : ''}
+      ${p.pinned ? `<div class="label">置顶评论</div>
+      <div class="pinned"><span>${esc(p.pinned)}</span><button class="mini-copy" type="button" data-copy-title="${esc(p.pinned)}">复制</button></div>` : ''}
+      ${warnHTML(checkPost(p, current?.input?.preset))}
       <div class="post-foot">正文 ${textLen(p.body)} 字</div>
     </article>`;
+  }
+
+  function warnHTML(warns) {
+    if (!warns.length) return '<div class="warns ok">✅ 合规自检：没发现问题（发布前仍建议自己读一遍）</div>';
+    return `<div class="warns">⚠️ 合规自检发现 ${warns.length} 处需要改：<ul>${warns.map((w) => `<li>${esc(w)}</li>`).join('')}</ul></div>`;
   }
 
   function renderResults() {
@@ -428,9 +530,9 @@
   }
   function renderMeta() {
     const ok = current.posts.filter((p) => p && !p.error).length;
-    el.resultMeta.textContent = `· ${current.input.topic} · ${TONE_NAMES[current.input.tone]} · ${current.mode === 'ai' ? 'AI' : '模板'} · ${ok} 篇`;
+    el.resultMeta.textContent = `· ${presetOf(current.input.preset).name} · ${current.input.topic} · ${TONE_NAMES[current.input.tone]} · ${current.mode === 'ai' ? 'AI' : '模板'} · ${ok} 篇`;
     const has = ok > 0;
-    [el.btnCopyAll, el.btnCsv, el.btnTxt].forEach((b) => { b.disabled = !has; });
+    [el.btnCopyAll, el.btnCsv, el.btnTxt, el.btnJson].forEach((b) => { b.disabled = !has; });
   }
   function renderOne(i) {
     const node = el.results.querySelector(`.post[data-i="${i}"]`);
@@ -463,7 +565,18 @@
       keywords: keywords.slice(),
       tone: getTone(),
       count: parseInt(el.count.value, 10) || 1,
+      preset: getPreset(),
     };
+  }
+
+  /** 模板模式：把人设的话题标签合并进去（最多 10 个） */
+  function withPresetTags(post, presetId) {
+    const extra = (presetOf(presetId).tags || []).map((t) => '#' + t);
+    const tags = [];
+    [...post.tags.slice(0, 4), ...extra, ...post.tags.slice(4)].forEach((t) => {
+      if (!tags.includes(t) && tags.length < 10) tags.push(t);
+    });
+    return { ...post, tags };
   }
 
   function setBusy(busy) {
@@ -494,7 +607,7 @@
     };
 
     if (mode === 'template') {
-      current.posts = window.XHSTemplates.generateBatch(input, input.count);
+      current.posts = window.XHSTemplates.generateBatch(input, input.count).map((p) => withPresetTags(p, input.preset));
       el.progress.hidden = true;
       renderResults();
       saveHistory(current);
@@ -576,16 +689,38 @@
     return '"' + s.replace(/"/g, '""') + '"';
   }
   el.btnCsv.addEventListener('click', () => {
-    const rows = [['序号', '标题1', '标题2', '标题3', '正文', '互动引导', '话题标签', '主题', '目标人群', '关键词', '语气风格']];
+    const rows = [['序号', '标题1', '标题2', '标题3', '正文', '互动引导', '话题标签', '封面主标题', '封面副标题', '封面构图', '配图清单', '置顶评论', '合规提醒', '账号人设', '主题', '目标人群', '关键词', '语气风格']];
     validPosts().forEach((p, i) => rows.push([
       i + 1, p.titles[0] || '', p.titles[1] || '', p.titles[2] || '', p.body, p.cta, p.tags.join(' '),
+      p.coverTitle || '', p.coverSubtitle || '', p.coverLayout || '',
+      (p.images || []).map((s, j) => `${j + 1}. ${s}`).join('\n'), p.pinned || '',
+      checkPost(p, current.input.preset).join('\n'),
+      presetOf(current.input.preset).name,
       current.input.topic, current.input.audience, current.input.keywords.join('、'), TONE_NAMES[current.input.tone],
     ]));
     const csv = '﻿' + rows.map((r) => r.map(csvCell).join(',')).join('\r\n'); // BOM：Excel 打开不乱码
     download(fileBase() + '.csv', csv, 'text/csv;charset=utf-8');
   });
+  // JSON：和「小红书内容助手」Skill 的批量模式字段一致
+  el.btnJson.addEventListener('click', () => {
+    const data = validPosts().map((p) => ({
+      industry: presetOf(current.input.preset).name,
+      title: p.titles[0] || '',
+      alt_titles: p.titles.slice(1),
+      cover_text: [p.coverTitle, p.coverSubtitle].filter(Boolean).join(' / '),
+      cover_layout: p.coverLayout || '',
+      body: p.body,
+      cta: p.cta,
+      hashtags: p.tags,
+      image_notes: p.images || [],
+      pinned_comment: p.pinned || '',
+      warnings: checkPost(p, current.input.preset),
+    }));
+    download(fileBase() + '.json', JSON.stringify(data, null, 2), 'application/json;charset=utf-8');
+  });
   function allText() {
     const head = [
+      `账号人设：${presetOf(current.input.preset).name}`,
       `主题：${current.input.topic}`,
       `目标人群：${current.input.audience || '不限'}`,
       `关键词：${current.input.keywords.join('、') || '无'}`,
@@ -620,7 +755,7 @@
       <div class="h-item">
         <div class="h-info">
           <div class="h-title">${esc(h.input.topic)}</div>
-          <div class="h-meta">${fmtTime(h.time)} · ${TONE_NAMES[h.input.tone] || ''} · ${h.mode === 'ai' ? 'AI' : '模板'} · ${h.posts.length} 篇${h.input.keywords?.length ? ' · ' + esc(h.input.keywords.join('、')) : ''}</div>
+          <div class="h-meta">${fmtTime(h.time)} · ${esc(presetOf(h.input.preset).name)} · ${TONE_NAMES[h.input.tone] || ''} · ${h.mode === 'ai' ? 'AI' : '模板'} · ${h.posts.length} 篇${h.input.keywords?.length ? ' · ' + esc(h.input.keywords.join('、')) : ''}</div>
         </div>
         <div class="h-actions">
           <button class="btn primary sm" type="button" data-h-view="${esc(h.id)}">查看</button>
@@ -663,11 +798,15 @@
     renderChips();
     const tone = el.form.querySelector(`input[name=tone][value="${input.tone}"]`);
     if (tone) tone.checked = true;
+    const preset = el.form.querySelector(`input[name=preset][value="${input.preset || 'general'}"]`);
+    if (preset) { preset.checked = true; lastPreset = preset.value; }
     setCount(input.count || 5);
+    updatePresetHint();
   }
 
   // ================= 初始化 =================
   const last = store.json(LS.lastInput, null);
   if (last) fillForm(last);
   updateModeHint();
+  updatePresetHint();
 })();
