@@ -603,6 +603,7 @@
       <div class="post-head">
         <span class="post-no">#${i + 1}${p.sub ? ` <small class="muted">${esc(p.sub)}</small>` : ''}${complianceBadge(p)}</span>
         <div class="post-tools">
+          ${p.caseDraft ? `<button class="btn ghost sm" type="button" data-act="save-case" data-i="${i}">💾 存为案例</button>` : ''}
           <button class="btn ghost sm" type="button" data-act="copy-body" data-i="${i}">复制正文+标签</button>
           <button class="btn primary sm" type="button" data-act="copy" data-i="${i}">📋 一键复制</button>
         </div>
@@ -666,6 +667,7 @@
     if (b.dataset.act === 'copy-body') copyText([p.body, '', p.cta, '', p.tags.join(' ')].join('\n'));
     if (b.dataset.act === 'copy-prompt') copyText(p.imagePrompts[Number(b.dataset.j)][b.dataset.lang]);
     if (b.dataset.act === 'cover') openCover(i);
+    if (b.dataset.act === 'save-case' && window.XHSLibrary) window.XHSLibrary.openCase({ ...p.caseDraft });
   });
 
   function setProgress(done, total, extra = '') {

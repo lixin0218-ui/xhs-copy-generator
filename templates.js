@@ -501,5 +501,146 @@
     return [{ main: Array.from(clean).slice(0, 10).join(''), sub: Array.from((post.titles && post.titles[1]) || '').slice(0, 14).join('') }];
   }
 
-  window.XHSTemplates = { generateOne, generateBatch, coverFallback, caseLabel, libInserts, textLength: len };
+  // ======================= 素材变笔记 =======================
+  const RE_TIME = /(\d{4}\s*年\s*\d{1,2}\s*月(?:\s*\d{1,2}\s*[日号])?|\d{1,2}\s*月\s*\d{1,2}\s*[日号]|\d{1,2}\s*月(?:初|中|底)?|(?:上|这)周[一二三四五六日天末]?|周末|昨天|今天|前几天|上个月|这个月)/;
+  const RE_COST = /(\$\s*[\d,.]+[kK]?|[\d,.]+\s*(?:美金|美元|刀|块)|费用|总价|报价|预算|花了)/;
+  const RE_RESULT = /(满意|顺利|完工|装完|搞定|效果|结果|好评|安静|解决|做完|完成|开心|放心|没问题)/;
+  const RE_PROBLEM = /(问题|坏|脱轨|漏|裂|吵|噪音|卡住|卡顿|老化|不平|渗|生锈|变形|太旧|太吵|太热|太冷|晒|下垂|松|困扰|麻烦|担心|有点慢|太慢|不顺)/;
+  const PLACES = ['卡特琳娜岛', '拉霍亚', '海峡群岛', '拉古纳海滩', '拉古纳', '马里布', '圣地亚哥', '长滩', '圣莫尼卡', '韩国城', 'DTLA', '圣佩德罗'];
+  // 不同行业的“素材变笔记”口吻：装修类写“项目/做法”，潜水写“潜水日记”，美食写“探店”
+  const FRAMES = {
+    reno: { noun: '项目', proIntro: '做的一个', ctx: '📍 现场情况', how: '🔧 具体是这么做的',
+      titles: ['{city}{s}改造实录📝', '{s}现场记录｜{city}', '{s}真实案例｜全过程📝', '{problem}，这样解决✅', '{s}改造前后对比', '{s}施工全记录📝'],
+      covers: ['{s}改造实录', '{s}现场记录', '{city}真实案例', '{s}真实案例'] },
+    scuba: { noun: '潜水', proIntro: '带的一次', ctx: '📍 基本情况', how: '🤿 这次的过程',
+      titles: ['{city}潜水日记🤿', '这次潜水的真实记录', '{s}实潜记录📝', '潜完这一趟的真实感受', '{city}实潜｜真实记录'],
+      covers: ['潜水日记', '{city}实潜', '这次潜水', '真实潜水记录'] },
+    food: { noun: '探店', proIntro: '的一次', ctx: '📍 基本情况', how: '🍽 这次吃了什么',
+      titles: ['{city}探店记录📝', '{city}这家店真实体验', '自费探店｜真实记录', '吃完这家的真实感受', '探店日记｜{city}'],
+      covers: ['探店记录', '{city}探店', '自费探店', '真实探店'] },
+    general: { noun: '经历', proIntro: '的一次', ctx: '📍 基本情况', how: '📝 过程记录',
+      titles: ['{s}真实体验📝', '关于{s}的真实感受', '{s}使用记录', '{s}真实记录'],
+      covers: ['{s}真实体验', '{s}记录', '真实感受'] },
+  };
+  const frameOf = (industry) => (industry === 'doors' || industry === 'build' ? FRAMES.reno : FRAMES[industry] || FRAMES.general);
+  /** 填充 {city}{s}{problem}，有占位符但值为空的公式直接丢弃 */
+  function fillFrame(list, vars) {
+    return list.map((f) => {
+      let ok = true;
+      const out = f.replace(/\{(city|s|problem)\}/g, (m, k) => { if (!vars[k]) ok = false; return vars[k] || ''; });
+      return ok ? out : '';
+    }).filter((x) => x && len(x) <= 20);
+  }
+
+  // 去掉行首的列表符号（“- ”“1.”“2、”），但保留“11月2日”这类日期
+  const lines = (t) => String(t || '').split(/\n+/).map((x) => x.trim().replace(/^(?:[-*•·]\s*|\d{1,2}[.、)）]\s+|\d{1,2}[、)）])/, '').trim()).filter(Boolean);
+  const stripEnd = (x) => x.replace(/[。.!！;；，,]+$/, '');
+  const RE_ACTION = /^(换|装|拆|加|做|修|调|改|用|安装|更换|重新|先|再|然后|最后|上门|测量|量)/;
+
+  /** 从随手记的要点里粗略提取案例字段（时间、城市、背景、问题、做法、费用、结果） */
+  function parseMaterial(points, photos, industry, sub) {
+    const L = lines(points);
+    const all = L.join('，');
+    const cities = [...CITIES().filter((c) => c !== '626'), ...PLACES];
+    const city = cities.find((c) => all.includes(c)) || '';
+    const tm = all.match(RE_TIME);
+    const out = { industry: industry || 'general', sub: sub || '', time: tm ? tm[1].replace(/\s+/g, '') : '', city, client: '', context: [], problem: [], solution: [], cost: '', result: [], note: '' };
+    L.forEach((l) => {
+      if (RE_COST.test(l) && /[\d$]/.test(l)) { out.cost = out.cost ? out.cost + '；' + stripEnd(l) : stripEnd(l); return; }
+      if (/(客户|业主|房主|学员|一家|夫妻|阿姨|叔叔|老人|留学生)/.test(l) && !out.client) { out.client = stripEnd(l); return; }
+      if (RE_RESULT.test(l) && !RE_ACTION.test(l)) { out.result.push(stripEnd(l)); return; }
+      if (RE_PROBLEM.test(l) && !RE_ACTION.test(l)) { out.problem.push(stripEnd(l)); return; }
+      // 只有时间、城市、房子情况的行，算作背景
+      const rest = l.replace(RE_TIME, '').replace(city, '').trim();
+      if ((tm && l.includes(tm[1])) || (city && l.includes(city)) || /(老房|房子|年建|townhouse|公寓|独栋)/i.test(l)) {
+        if (rest) out.context.push(stripEnd(rest));
+        return;
+      }
+      out.solution.push(stripEnd(l));
+    });
+    const ph = lines(photos);
+    if (ph.length) out.note = `有 ${ph.length} 张现场照片`;
+    return {
+      ...out,
+      steps: out.solution.slice(),
+      client: [out.context.join('，'), out.client].filter(Boolean).join('，'),
+      problem: out.problem.join('，'),
+      solution: out.solution.join('；'),
+      result: out.result.join('，'),
+    };
+  }
+
+  /**
+   * 把现场要点 + 照片描述整理成一篇真实体验笔记（模板模式）
+   * @param {{industry, sub, topic, points, photos, tone, profile}} o
+   */
+  function fromMaterial(o) {
+    const ind = IND()[o.industry];
+    const hasInd = ind && ind.subs && ind.subs.length;
+    const sub = hasInd ? ((o.sub && ind.subs.find((x) => x.id === o.sub)) || ind.subs[0]) : null;
+    const tone = o.tone || 'tiyan';
+    const draft = parseMaterial(o.points, o.photos, o.industry, sub ? sub.id : '');
+    const L = lines(o.points);
+    const photos = lines(o.photos);
+    const sName = sub ? (sub.short || sub.name) : (Array.from(String(o.topic || '这次的项目')).slice(0, 8).join(''));
+    const topic = String(o.topic || '').trim() || (draft.city ? `${draft.city}${sName}现场记录` : `${sName}现场记录`);
+    const ins = libInserts({ profile: o.profile }, tone, sName);
+
+    const fr = frameOf(o.industry);
+    const where = [draft.time, draft.city ? '在' + draft.city : ''].filter(Boolean).join('');
+    const what = fr === FRAMES.reno ? `${sName}${fr.noun}` : fr.noun;
+    const opener = `记录一下${where || '最近'}${ins.intro ? fr.proIntro : '的'}${what}，情况和过程都写下来了，给有类似需求的朋友参考🙋`;
+    const parts = [opener];
+    if (ins.intro) parts.push(ins.intro);
+    if (draft.client || draft.problem) parts.push(`${fr.ctx}：${[draft.client, draft.problem].filter(Boolean).join('，')}。`);
+    const steps = draft.steps.length ? draft.steps : L.filter((l) => !RE_RESULT.test(l));
+    if (steps.length) parts.push(fr.how + '：\n' + steps.slice(0, 6).map((x, i) => `${EMOJI_NUMS[i]} ${x}`).join('\n'));
+    const res = [draft.result, draft.cost ? '费用：' + draft.cost : ''].filter(Boolean).join('；');
+    if (res) parts.push(`✅ 结果：${res}。`);
+    if (photos.length) parts.push('📷 图片说明：' + photos.slice(0, 9).map((x, i) => `图${i + 1} ${stripEnd(x)}`).join('；') + '。');
+
+    // 素材太少时，补 1-2 段本细分的专业知识，让笔记更有干货
+    const summary = { bikeng: '🚫以上是这次的真实复盘，希望能帮你少踩坑。', ganhuo: '📝以上是这次的完整记录，建议收藏备用。', zhongcao: '整个过程下来真的很满意，推荐给有同样需求的朋友💖', tiyan: '以上都是这次的真实情况，每家情况不同，仅供参考🙋' }[tone];
+    const build = (extra) => [...parts, ...extra, summary].join('\n\n');
+    const extra = [];
+    if (sub) {
+      const pool = shuffle([...(sub.facts || []), ...(tone === 'bikeng' ? sub.pitfalls || [] : [])]);
+      for (const f of pool) {
+        if (len(build(extra)) >= 320 || extra.length >= 2) break;
+        if (len(build([...extra, '💡 ' + f])) <= 640) extra.push('💡 补充一点：' + f);
+      }
+    }
+    const body = build(extra);
+
+    const ctx = { t: topic, p: '大家', s: sName, c: draft.city || pick(CITIES()), k: sName, k2: sName, term: sName, n: steps.length };
+    const vars = { city: draft.city, s: sName, problem: draft.problem ? stripEnd(draft.problem.split('，')[0]).slice(0, 10) : '' };
+    const titles = [...new Set(fillFrame(shuffle(fr.titles), vars))].slice(0, 3);
+    while (titles.length < 3) titles.push(`${sName}真实记录${titles.length + 1}`);
+
+    const tags = [];
+    const addTag = (x) => { const c = cleanTag(x); if (c && !tags.includes(c)) tags.push(c); };
+    if (o.topic && len(o.topic) <= 12) addTag(o.topic);
+    if (sub) (sub.tags || []).slice(0, 3).forEach(addTag);
+    if (hasInd) shuffle(ind.tags || []).slice(0, 3).forEach(addTag);
+    if (draft.city) addTag(draft.city);
+    ['真实案例', '现场记录', '经验分享'].forEach((x) => { if (tags.length < 8) addTag(x); });
+
+    const sfx = PROMPT_SUFFIX();
+    const shots = [...photos.map((x) => '（已拍）' + stripEnd(x)), ...(sub ? shuffle(sub.shots) : GENERAL_SHOTS).map((x) => '（建议补拍）' + x)].slice(0, Math.max(3, Math.min(6, photos.length + 2)));
+    const ctaBase = hasInd ? fill(pick(ind.ctas), ctx) : '有类似情况的朋友，评论区聊聊～';
+    return {
+      titles,
+      body,
+      cta: withEnding(ctaBase, ins),
+      tags: tags.slice(0, 10).map((x) => '#' + x),
+      covers: makeCovers(fillFrame(fr.covers, vars), [draft.result ? stripEnd(draft.result).slice(0, 14) : '全过程记录', '真实案例分享', draft.city ? `${draft.city}现场实拍` : '现场实拍'], () => ctx),
+      shots,
+      imagePrompts: sub ? (sub.scenes || []).map((sc) => ({ zh: sc.zh + sfx.zh, en: sc.en + sfx.en })) : [],
+      sub: sub ? sub.name : '',
+      caseDraft: (({ steps, context, ...rest }) => rest)(draft),
+      topic,
+    };
+  }
+
+  window.XHSTemplates = { generateOne, generateBatch, coverFallback, caseLabel, libInserts, fromMaterial, parseMaterial, textLength: len };
 })();

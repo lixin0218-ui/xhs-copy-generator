@@ -162,7 +162,43 @@
   <main class="panel tools-panel" data-panel="tools" hidden>
     <div class="subtabs" id="toolTabs">
       <button type="button" class="subtab active" data-tool="check">🛡 违禁词检测</button>
+      <button type="button" class="subtab" data-tool="material">📝 素材变笔记</button>
     </div>
+
+    <section class="card tool" data-toolpanel="material" hidden>
+      <h2>📝 素材变笔记</h2>
+      <p class="hint">把现场随手记的几句话和照片描述丢进来，整理成一篇真实体验笔记；还能一键存进案例库，下次直接带入。<span class="mode-note"></span></p>
+      <div class="two-col field">
+        <label><span>行业</span><select id="matIndustry"></select></label>
+        <label><span>细分方向</span><select id="matSub"></select></label>
+      </div>
+      <div class="two-col field">
+        <label><span>主题（可留空）</span><input id="matTopic" type="text" maxlength="40" placeholder="如：阿凯迪亚衣帽间门改造" /></label>
+        <label><span>账号档案</span><select id="matProfile"><option value="">不带入</option></select></label>
+      </div>
+      <label class="field">
+        <span>现场要点（每行一条，想到什么写什么）</span>
+        <textarea id="matPoints" rows="7" placeholder="11月2日 阿凯迪亚 1962 年老房&#10;客户是刚搬来的一家四口&#10;主卧衣柜镜面推拉门下轨脱轨，推不动&#10;拆掉旧门，换黑色极窄铝框长虹玻璃三联动门&#10;加了感应 LED 灯带&#10;一天装完，客户很满意&#10;总价 $2,800 含拆旧"></textarea>
+      </label>
+      <label class="field">
+        <span>照片描述（每行一张，可留空）</span>
+        <textarea id="matPhotos" rows="3" placeholder="改造前：镜面门歪了&#10;装好后的正面&#10;灯带亮起的内部"></textarea>
+      </label>
+      <div class="field">
+        <span>语气</span>
+        <div class="opt-row" id="matTone">
+          <button type="button" class="opt active" data-tone="tiyan">🙋 真实体验</button>
+          <button type="button" class="opt" data-tone="ganhuo">📚 干货科普</button>
+          <button type="button" class="opt" data-tone="bikeng">⚠️ 避坑提醒</button>
+          <button type="button" class="opt" data-tone="zhongcao">💖 种草分享</button>
+        </div>
+      </div>
+      <div class="opt-row">
+        <button type="button" class="btn primary" id="btnMatGen">✨ 整理成笔记</button>
+        <button type="button" class="btn ghost" id="btnMatCase">💾 直接存为案例</button>
+      </div>
+      <p class="hint" id="matMsg"></p>
+    </section>
 
     <section class="card tool" data-toolpanel="check">
       <h2>🛡 违禁词 / 限流词检测</h2>
