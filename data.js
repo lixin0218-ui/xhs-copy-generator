@@ -1,5 +1,5 @@
 /*
- * 数据页：效果回填（已发布状态 + 点赞/收藏/评论/咨询）、简单统计。
+ * 数据页：效果回填（已发布状态 + 点赞/收藏/评论/咨询）、简单统计、全部数据备份与导入。
  */
 (function () {
   'use strict';
@@ -136,6 +136,62 @@
     ]));
     X.download(`xhs-stats_${new Date().toISOString().slice(0, 10)}.csv`, '﻿' + rows.map((r) => r.map(X.csvCell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
   });
+
+  // ================= 备份与导入 =================
+  const KEYS = {
+    profiles: 'xhs_profiles', cases: 'xhs_cases', history: LS.history, calendar: 'xhs_calendar',
+    customWords: 'xhs_custom_words', model: LS.model, concurrency: LS.conc, lastInput: LS.lastInput,
+  };
+  const ARRAY_KEYS = ['profiles', 'cases', 'history'];
+
+  $('btnExportAll').addEventListener('click', () => {
+    const data = { app: 'xhs-copy-generator', version: 3, exportedAt: new Date().toISOString(), note: '不包含 API Key' };
+    Object.entries(KEYS).forEach(([k, lsKey]) => {
+      const raw = X.store.get(lsKey);
+      if (raw === null) return;
+      try { data[k] = JSON.parse(raw); } catch { data[k] = raw; }
+    });
+    const json = JSON.stringify(data, null, 2);
+    X.download(`xhs-backup_${new Date().toISOString().slice(0, 10)}.json`, json, 'application/json');
+    el.msg.textContent = `✅ 已导出：${(data.profiles || []).length} 个档案、${(data.cases || []).length} 个案例、${(data.history || []).length} 条历史记录${data.calendar ? '、1 份内容日历' : ''}。`;
+  });
+
+  async function doImport(file, mode) {
+    if (!file) return;
+    let data;
+    try { data = JSON.parse(await file.text()); } catch { el.msg.textContent = '❌ 文件不是有效的 JSON'; return; }
+    if (!data || data.app !== 'xhs-copy-generator') { el.msg.textContent = '❌ 这不是本工具导出的备份文件'; return; }
+    if (mode === 'replace' && !confirm('覆盖导入会先清空本机的档案、案例、历史、日历等数据（API Key 保留），确定继续吗？')) return;
+    const stats = [];
+    ARRAY_KEYS.forEach((k) => {
+      if (!Array.isArray(data[k])) return;
+      const incoming = data[k].filter((x) => x && x.id);
+      let list;
+      if (mode === 'replace') list = incoming;
+      else {
+        const cur = X.store.json(KEYS[k], []);
+        const ids = new Set(incoming.map((x) => x.id));
+        list = [...incoming, ...cur.filter((x) => !ids.has(x.id))];
+      }
+      if (k === 'history') list.sort((a, b) => (b.time || 0) - (a.time || 0));
+      X.store.set(KEYS[k], JSON.stringify(list));
+      stats.push(`${{ profiles: '档案', cases: '案例', history: '历史' }[k]} ${incoming.length}`);
+    });
+    if (data.calendar && (mode === 'replace' || !X.store.get(KEYS.calendar))) X.store.set(KEYS.calendar, JSON.stringify(data.calendar));
+    if (typeof data.customWords === 'string') {
+      const cur = mode === 'replace' ? [] : (X.store.get(KEYS.customWords) || '').split('\n');
+      const merged = [...new Set([...cur, ...data.customWords.split('\n')].map((x) => x.trim()).filter(Boolean))].join('\n');
+      X.store.set(KEYS.customWords, merged);
+    }
+    ['model', 'concurrency'].forEach((k) => { if (typeof data[k] === 'string') X.store.set(KEYS[k], data[k]); });
+    if (data.lastInput && (mode === 'replace' || !X.store.get(KEYS.lastInput))) X.store.set(KEYS.lastInput, JSON.stringify(data.lastInput));
+    if (mode === 'replace') ['profiles', 'cases', 'history'].forEach((k) => { if (!Array.isArray(data[k])) X.store.del(KEYS[k]); });
+    if (mode === 'replace' && !data.calendar) X.store.del(KEYS.calendar);
+    el.msg.textContent = `✅ 导入完成（${stats.join('，')}），页面即将刷新…`;
+    setTimeout(() => location.reload(), 900);
+  }
+  $('importMerge').addEventListener('change', (e) => { doImport(e.target.files[0], 'merge'); e.target.value = ''; });
+  $('importReplace').addEventListener('change', (e) => { doImport(e.target.files[0], 'replace'); e.target.value = ''; });
 
   window.XHSData = { renderStats, renderList, allPosts };
 })();

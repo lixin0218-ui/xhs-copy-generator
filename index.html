@@ -137,7 +137,7 @@
     </section>
   </main>
 
-  <!-- ============ 数据：效果回填 + 统计 ============ -->
+  <!-- ============ 数据：效果回填 + 统计 + 备份 ============ -->
   <main class="panel page-panel" data-panel="data" hidden>
     <section class="card">
       <div class="output-head">
@@ -161,6 +161,17 @@
       </div>
       <p class="hint">发布后把笔记标记为“已发布”，过几天回来填上点赞、收藏、评论和咨询数，就能看出哪类内容效果好。数据保存在本机浏览器。</p>
       <div id="pubList" class="pub-list"></div>
+    </section>
+    <section class="card">
+      <h2>💾 备份与迁移</h2>
+      <p class="hint">把全部数据（账号档案、案例库、历史记录与效果数据、内容日历、自定义违禁词、设置）导出成一个 JSON 文件，在手机和电脑之间转移。<b>🔒 不包含 API Key</b>，换设备后需要重新填写。</p>
+      <div class="opt-row">
+        <button type="button" class="btn primary" id="btnExportAll">⬇️ 导出全部数据</button>
+        <label class="btn ghost file-btn">⬆️ 导入（合并）<input id="importMerge" type="file" accept="application/json,.json" /></label>
+        <label class="btn ghost file-btn">⬆️ 导入（覆盖）<input id="importReplace" type="file" accept="application/json,.json" /></label>
+      </div>
+      <p class="hint">合并：保留现有数据，加入备份里新的档案/案例/历史（同一条记录以备份为准）。覆盖：先清空本机数据再导入。</p>
+      <p class="hint" id="backupMsg"></p>
     </section>
   </main>
 
