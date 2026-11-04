@@ -27,6 +27,7 @@
   <nav class="tabs" id="tabs" aria-label="功能分区">
     <button type="button" class="tab active" data-tab="gen"><span>✍️</span>生成</button>
     <button type="button" class="tab" data-tab="tools"><span>🛠</span>工具</button>
+    <button type="button" class="tab" data-tab="library"><span>📚</span>资料库</button>
   </nav>
 
   <main class="layout panel" data-panel="gen">
@@ -61,6 +62,16 @@
             <div class="chips" id="kwChips"></div>
             <input id="kwInput" type="text" maxlength="20" placeholder="如：防雾、贴合度、近视" />
           </div>
+        </div>
+
+        <div class="field lib-field">
+          <span>带入我的资料 <small class="muted">（可选，让文案有真实细节）</small></span>
+          <div class="two-col">
+            <label><span class="sub-label">账号档案</span><select id="genProfile"><option value="">不带入</option></select></label>
+            <label><span class="sub-label">真实案例</span><button type="button" class="btn ghost pick-btn" id="genCasesBtn">选择案例（0）</button></label>
+          </div>
+          <div id="genCasesBox" class="case-pick" hidden></div>
+          <p class="hint" id="libHint">在「📚 资料库」里添加档案和案例。选多个案例时，批量生成会按顺序每篇带入一个。</p>
         </div>
 
         <div class="field">
@@ -121,6 +132,29 @@
           <p class="muted">没有 API Key 也能用模板模式先试试～</p>
         </div>
       </div>
+    </section>
+  </main>
+
+  <!-- ============ 资料库 ============ -->
+  <main class="panel page-panel lib-panel" data-panel="library" hidden>
+    <section class="card">
+      <div class="output-head">
+        <h2>👤 身份 / 账号档案</h2>
+        <button type="button" class="btn primary sm" id="btnNewProfile">＋ 新建档案</button>
+      </div>
+      <p class="hint">比如“洛杉矶门窗师傅 Leo”“PADI 潜水教练 Lisa”。生成时选中档案，文案会用这个身份第一人称来写，并带上你的服务区域、从业年限、特色和常用结尾。</p>
+      <div id="profileList" class="lib-list"></div>
+    </section>
+    <section class="card">
+      <div class="output-head">
+        <h2>📁 真实案例库</h2>
+        <div class="opt-row">
+          <select id="caseFilter" class="mini-select"><option value="">全部行业</option></select>
+          <button type="button" class="btn primary sm" id="btnNewCase">＋ 新增案例</button>
+        </div>
+      </div>
+      <p class="hint">记录真实做过的项目，生成时带入，正文会写进具体的时间、城市、问题、做法、费用和结果。🔒 只保存在本机浏览器；请不要写客户真实姓名、门牌号等隐私信息。</p>
+      <div id="caseList" class="lib-list"></div>
     </section>
   </main>
 
@@ -282,6 +316,49 @@
     </div>
   </dialog>
 
+  <!-- 档案编辑 -->
+  <dialog id="profileDlg" class="dlg">
+    <form method="dialog" class="dlg-inner" id="profileForm">
+      <div class="dlg-head"><h3>👤 账号档案</h3><button class="icon-btn" value="cancel" formnovalidate aria-label="关闭">✕</button></div>
+      <input type="hidden" name="id" />
+      <label class="field"><span>档案名称 <em>*</em></span><input name="name" type="text" maxlength="30" required placeholder="如：门窗号-Leo" /></label>
+      <label class="field"><span>身份</span><input name="identity" type="text" maxlength="40" placeholder="如：洛杉矶门窗安装师傅 Leo" /></label>
+      <div class="two-col">
+        <label><span>服务区域</span><input name="area" type="text" maxlength="40" placeholder="如：圣盖博谷、橙县" /></label>
+        <label><span>从业年限</span><input name="years" type="text" maxlength="10" placeholder="如：12" /></label>
+      </div>
+      <label class="field"><span>特色 / 优势</span><textarea name="features" rows="2" maxlength="120" placeholder="如：自己带队安装不转包，有加州 CSLB 执照"></textarea></label>
+      <label class="field"><span>说话风格</span><input name="style" type="text" maxlength="60" placeholder="如：实在、口语化、像老朋友聊天，偶尔带点幽默" /></label>
+      <label class="field"><span>常用结尾</span><textarea name="ending" rows="2" maxlength="120" placeholder="如：我是 Leo，在 626 做门窗 12 年，关注我少踩坑～"></textarea></label>
+      <div class="dlg-actions"><button class="btn ghost" value="cancel" formnovalidate>取消</button><button class="btn primary" type="submit" value="save">保存</button></div>
+    </form>
+  </dialog>
+
+  <!-- 案例编辑 -->
+  <dialog id="caseDlg" class="dlg">
+    <form method="dialog" class="dlg-inner" id="caseForm">
+      <div class="dlg-head"><h3>📁 真实案例</h3><button class="icon-btn" value="cancel" formnovalidate aria-label="关闭">✕</button></div>
+      <input type="hidden" name="id" />
+      <div class="two-col">
+        <label><span>行业</span><select name="industry"></select></label>
+        <label><span>细分方向</span><select name="sub"></select></label>
+      </div>
+      <div class="two-col">
+        <label><span>时间</span><input name="time" type="text" maxlength="20" placeholder="如：2026年5月" /></label>
+        <label><span>城市</span><input name="city" type="text" maxlength="20" placeholder="如：阿凯迪亚" /></label>
+      </div>
+      <label class="field"><span>客户情况</span><input name="client" type="text" maxlength="60" placeholder="如：刚买 1960 年老房的年轻夫妻" /></label>
+      <label class="field"><span>问题</span><textarea name="problem" rows="2" maxlength="200" placeholder="客户遇到了什么问题"></textarea></label>
+      <label class="field"><span>解决方案</span><textarea name="solution" rows="3" maxlength="300" placeholder="你是怎么做的：材料、工艺、步骤"></textarea></label>
+      <div class="two-col">
+        <label><span>费用</span><input name="cost" type="text" maxlength="40" placeholder="如：$2,800（含拆旧）" /></label>
+        <label><span>结果</span><input name="result" type="text" maxlength="80" placeholder="如：一天装完，推拉顺滑" /></label>
+      </div>
+      <label class="field"><span>备注</span><input name="note" type="text" maxlength="100" placeholder="如：客户同意分享照片" /></label>
+      <div class="dlg-actions"><button class="btn ghost" value="cancel" formnovalidate>取消</button><button class="btn primary" type="submit" value="save">保存</button></div>
+    </form>
+  </dialog>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="banned-words.js"></script>
@@ -290,6 +367,7 @@
   <script src="templates.js"></script>
   <script src="cover.js"></script>
   <script src="app.js"></script>
+  <script src="library.js"></script>
   <script src="tools.js"></script>
 </body>
 </html>

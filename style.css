@@ -345,3 +345,28 @@ mark.vio, .vio { border-radius: 3px; padding: 0 1px; }
   .tools-panel, .page-panel { padding: 12px; gap: 12px; }
   .toast { bottom: calc(80px + env(safe-area-inset-bottom)); }
 }
+
+/* ---------- v3：资料库 ---------- */
+.lib-panel { grid-template-columns: 1fr 1fr; align-items: start; }
+.lib-list { display: grid; gap: 10px; }
+.lib-item { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: #fff; }
+.lib-item h4 { margin: 0 0 4px; font-size: 15px; }
+.lib-item p { margin: 2px 0; font-size: 13px; color: #444; word-break: break-word; }
+.lib-item .meta { color: var(--muted); font-size: 12px; }
+.lib-item .row-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.lib-empty { text-align: center; color: var(--muted); padding: 24px 0; font-size: 14px; }
+.mini-select { padding: 5px 8px; border: 1px solid #e3e3e3; border-radius: 8px; font-size: 13px; background: #fff; }
+.sub-label { font-size: 12px !important; color: var(--muted); font-weight: 400 !important; }
+.pick-btn { width: 100%; justify-content: flex-start; border-radius: 10px; padding: 9px 12px; font-size: 15px; }
+.case-pick { border: 1px solid var(--line); border-radius: 10px; padding: 8px; margin-top: 8px; max-height: 220px; overflow: auto; display: grid; gap: 4px; }
+.case-pick label { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; padding: 4px; border-radius: 6px; cursor: pointer; }
+.case-pick label:hover { background: var(--red-soft); }
+.case-pick input { margin-top: 3px; accent-color: var(--red); }
+.case-tag { display: inline-block; font-size: 12px; background: #eef4ff; color: #2c4f9e; border-radius: 6px; padding: 2px 8px; margin-top: 6px; }
+.dlg form .two-col > label { display: block; margin-bottom: 16px; }
+.dlg form .two-col input, .dlg form .two-col select {
+  width: 100%; padding: 10px 12px; border: 1px solid #e3e3e3; border-radius: 10px; font-size: 16px; background: #fff;
+}
+@media (max-width: 900px) { .lib-panel { grid-template-columns: 1fr; } }
+
+.dlg { overflow: auto; }

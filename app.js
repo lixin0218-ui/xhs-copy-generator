@@ -399,7 +399,28 @@
     if (total > 1) {
       lines.push(`这是同一主题批量生成的第 ${index + 1}/${total} 篇。为了和其他篇有区分，这篇请侧重「${ANGLES[index % ANGLES.length]}」，开头、结构、标题和封面都要换一种写法。`);
     }
+    lines.push(...libPromptLines(libFor(input, index)));
     return lines.join('\n');
+  }
+  function libPromptLines({ profile: pf, case: cs }) {
+    const out = [];
+    const f = (label, v) => (v ? `- ${label}：${v}` : null);
+    if (pf) {
+      out.push('', '【账号档案（用这个身份第一人称写）】', ...[
+        f('身份', pf.identity), f('服务区域', pf.area), f('从业年限', pf.years), f('特色/优势', pf.features),
+        f('说话风格', pf.style), f('常用结尾（放在互动引导里）', pf.ending),
+      ].filter(Boolean));
+    }
+    if (cs) {
+      out.push('', '【真实案例（必须写进正文）】', ...[
+        f('时间', cs.time), f('城市', cs.city), f('客户情况', cs.client), f('问题', cs.problem),
+        f('解决方案', cs.solution), f('费用', cs.cost), f('结果', cs.result), f('备注', cs.note),
+      ].filter(Boolean));
+    }
+    if (pf || cs) {
+      out.push('', '要求：把上面的真实信息自然地写进正文（用自己的话，不要列表照抄）；案例里的时间、城市、问题、做法、费用、结果等具体细节要保留；不要编造资料里没有的数字、客户信息或效果；按档案的说话风格来写，互动引导里融入常用结尾。');
+    }
+    return out;
   }
 
   const clip = (str, n) => Array.from(String(str || '').trim()).slice(0, n).join('');
@@ -586,6 +607,7 @@
           <button class="btn primary sm" type="button" data-act="copy" data-i="${i}">📋 一键复制</button>
         </div>
       </div>
+      ${p.caseLabel ? `<div class="case-tag">📍 已带入真实案例：${esc(p.caseLabel)}</div>` : ''}
       <div class="label">备选标题</div>
       <ul class="titles">${titles}</ul>
       <div class="label">正文</div>
@@ -763,7 +785,14 @@
       keywords: keywords.slice(),
       tone: getTone(),
       count: parseInt(el.count.value, 10) || 1,
+      ...(window.XHSLibrary ? window.XHSLibrary.selection() : {}),
     };
+  }
+  /** 第 i 篇要带入的档案和案例 */
+  function libFor(input, i) {
+    if (!window.XHSLibrary) return { profile: null, case: null };
+    const lib = window.XHSLibrary.resolve(input);
+    return { profile: lib.profile, case: lib.cases.length ? lib.cases[i % lib.cases.length] : null };
   }
 
   function setBusy(busy) {
@@ -799,7 +828,7 @@
     };
 
     if (mode === 'template') {
-      current.posts = window.XHSTemplates.generateBatch(input, input.count);
+      current.posts = window.XHSTemplates.generateBatch(input, input.count, window.XHSLibrary ? window.XHSLibrary.resolve(input) : null);
       el.progress.hidden = true;
       renderResults();
       saveHistory(current);
@@ -825,6 +854,8 @@
         const i = next++;
         try {
           batch.posts[i] = await generateOneAI(input, i, total, signal);
+          const cs = libFor(input, i).case;
+          if (cs) { batch.posts[i].caseId = cs.id; batch.posts[i].caseLabel = window.XHSTemplates.caseLabel(cs); }
         } catch (err) {
           if (err.name === 'AbortError') { batch.posts[i] = { error: '已停止' }; }
           else {
@@ -977,6 +1008,7 @@
     const tone = el.form.querySelector(`input[name=tone][value="${input.tone}"]`);
     if (tone) tone.checked = true;
     setCount(input.count || 5);
+    if (window.XHSLibrary) window.XHSLibrary.setSelection(input.profileId, input.caseIds);
   }
 
   // ================= 分区导航 =================
@@ -1003,7 +1035,7 @@
   window.XHS = {
     store, LS, esc, toast, copyText, download, fmtTime, csvCell, textLen,
     INDUSTRIES, TONE_NAMES, getMode, callClaude, ApiError, sleep, MODEL_NAMES,
-    hasKey: () => !!store.get(LS.key), openSettings, showTab, showBatch, runGenerate, fillForm,
+    hasKey: () => !!store.get(LS.key), libPromptLines, systemPromptFor, parsePost, POST_SCHEMA, openSettings, showTab, showBatch, runGenerate, fillForm,
     loadHistory, saveHistory, persistCurrent, getCurrent: () => current,
     postToText, postCopyText, coversOf,
   };

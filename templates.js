@@ -194,17 +194,17 @@
     return out;
   }
 
-  function makeBody(tone, ctx, keywords) {
+  function makeBody(tone, ctx, keywords, ins = {}) {
     const kws = keywords.length ? shuffle(keywords) : [ctx.t];
     const points = shuffle(POINTS[tone]);
-    const opener = fill(pick(OPENERS[tone]), ctx);
-    const summary = fill(pick(SUMMARIES[tone]), { ...ctx, k: kws[0] });
+    const opener = fill(ins.opener || pick(OPENERS[tone]), ctx);
+    const summary = ins.summary || fill(pick(SUMMARIES[tone]), { ...ctx, k: kws[0] });
 
     const paras = [];
     let i = 0;
-    const build = () => [opener, ...paras, summary].join('\n\n');
+    const build = () => [opener, ins.intro, ...paras, ins.casePara, summary].filter(Boolean).join('\n\n');
     // 先放 3 段，长度不足 300 继续加，最多 6 段
-    while (i < points.length && (paras.length < 3 || len(build()) < 320) && paras.length < 6) {
+    while (i < points.length && (paras.length < (ins.casePara ? 2 : 3) || len(build()) < 320) && paras.length < 6) {
       const k = kws[i % kws.length];
       const k2 = kws.length > 1 ? kws[(i + 1) % kws.length] : ctx.t;
       paras.push(`${EMOJI_NUMS[paras.length]} ${fill(points[i], { ...ctx, k, k2 })}`);
@@ -253,15 +253,16 @@
     };
     const keywords = (input.keywords || []).map((k) => k.trim()).filter(Boolean);
     const shortT = Array.from(ctx.t).slice(0, 8).join('');
-    const body = makeBody(tone, ctx, keywords);
+    const ins = libInserts(input, tone, Array.from(ctx.t).slice(0, 8).join(''));
+    const body = makeBody(tone, ctx, keywords, ins);
     ctx.n = body.count; // 标题里的“N 个”与正文要点数一致
     const covers = makeCovers(GENERAL_COVER_MAIN, GENERAL_COVER_SUB[tone], () => ({ ...ctx, k: keywords.length && Math.random() < 0.4 ? pick(keywords) : shortT }));
     const kwText = keywords.length ? keywords.join('、') : '';
     return {
-      titles: makeTitles(tone, ctx, keywords),
+      titles: withCaseTitle(makeTitles(tone, ctx, keywords), ins),
       body: body.text,
-      cta: fill(pick(CTAS[tone]), { ...ctx, k: keywords[0] || ctx.t }),
-      tags: makeTags(tone, ctx, keywords),
+      cta: withEnding(fill(pick(CTAS[tone]), { ...ctx, k: keywords[0] || ctx.t }), ins),
+      tags: withCityTag(makeTags(tone, ctx, keywords), ins),
       covers,
       shots: shuffle(GENERAL_SHOTS).slice(0, 5),
       imagePrompts: [
@@ -326,14 +327,14 @@
     return [...main, ...rest];
   }
 
-  function industryBody(ind, sub, tone, ctx, userKws) {
+  function industryBody(ind, sub, tone, ctx, userKws, ins = {}) {
     const openers = (sub.openers && sub.openers[tone]) || ind.openers[tone];
-    const opener = fill(pick(openers), ctx);
-    const summary = fill(pick(ind.summaries[tone]), ctx);
+    const opener = fill(ins.opener || pick(openers), ctx);
+    const summary = ins.summary || fill(pick(ind.summaries[tone]), ctx);
     const kwLine = userKws.length ? `🔑 本篇关键词：${userKws.join(' / ')}，咨询或下单时可以直接拿这些词去问。` : '';
     const pool = paragraphPool(ind, sub, tone);
     const paras = [];
-    const build = () => [opener, ...paras.map((p, i) => `${EMOJI_NUMS[i]} ${p}`), kwLine, summary].filter(Boolean).join('\n\n');
+    const build = () => [opener, ins.intro, ...paras.map((p, i) => `${EMOJI_NUMS[i]} ${p}`), kwLine, ins.casePara, summary].filter(Boolean).join('\n\n');
     for (const raw of pool) {
       const p = fill(raw, ctx);
       if (paras.includes(p)) continue;
@@ -347,10 +348,12 @@
 
   function generateIndustry(input, ind) {
     const tone = ind.titles[input.tone] ? input.tone : 'ganhuo';
-    const sub = (input.sub && ind.subs.find((s) => s.id === input.sub)) || pick(ind.subs);
+    // 细分不限时，如果带入的案例属于本行业某个细分，就按案例的细分来写
+    const subId = input.sub || (input.case && input.case.industry === input.industry ? input.case.sub : '');
+    const sub = (subId && ind.subs.find((s) => s.id === subId)) || pick(ind.subs);
     const userKws = (input.keywords || []).map((k) => k.trim()).filter(Boolean);
     const shortTerms = sub.terms.filter((t) => len(t) <= 6);
-    const city = pick(CITIES());
+    const city = (input.case && input.case.city) || pick(CITIES());
     const base = {
       t: input.topic.trim(),
       p: (input.audience || '').trim() || ind.defaultAudience || '大家',
@@ -363,7 +366,8 @@
       return { ...base, term, k, k2: pick(sub.terms), n: base.n || 3 };
     };
     const ctx = ctxFn();
-    const body = industryBody(ind, sub, tone, ctx, userKws);
+    const ins = libInserts(input, tone, base.s);
+    const body = industryBody(ind, sub, tone, ctx, userKws, ins);
     base.n = body.count; // 标题/封面里的“N 个”与正文要点数一致
 
     let titles = industryTitles(ind, sub, tone, ctxFn);
@@ -371,6 +375,7 @@
       const extra = makeTitles(tone, base, userKws.length ? userKws : shortTerms).filter((t) => !titles.includes(t));
       titles = titles.concat(extra).slice(0, 3);
     }
+    titles = withCaseTitle(titles, ins);
 
     const tags = [];
     const addTag = (s) => { const c = cleanTag(s); if (c && !tags.includes(c)) tags.push(c); };
@@ -384,13 +389,75 @@
     return {
       titles,
       body: body.text,
-      cta: fill(pick(ind.ctas), ctx),
-      tags: tags.slice(0, 10).map((t) => '#' + t),
+      cta: withEnding(fill(pick(ind.ctas), ctx), ins),
+      tags: withCityTag(tags.slice(0, 10).map((t) => '#' + t), ins),
       covers: makeCovers(sub.coverMain || ind.coverMain, sub.coverSub || ind.coverSub, ctxFn),
       shots: shuffle(sub.shots).slice(0, Math.min(sub.shots.length, 5)),
       imagePrompts: (sub.scenes || []).map((sc) => ({ zh: sc.zh + sfx.zh, en: sc.en + sfx.en })),
       sub: sub.name,
     };
+  }
+
+  // ======================= 资料库：档案 + 真实案例 =======================
+  const PRO_OPENERS = {
+    ganhuo: '做这一行这些年，被问得多的就是{t}。今天把要点一次讲清楚，建议先收藏📌',
+    zhongcao: '最近刚完成的一个案例效果特别好，关于{t}，忍不住来分享💖',
+    bikeng: '做这一行这些年，见过太多人在{t}上踩坑，今天把常见的坑一次说清楚🚫',
+    tiyan: '做这一行这些年，经手过不少真实案例。关于{t}，今天挑一个说说我的真实感受🙋',
+  };
+  const trimEnd = (v) => String(v || '').trim().replace(/[。.!！;；，,]+$/, '');
+  /** 根据档案和案例生成要插入正文的段落 */
+  function libInserts(input, tone, shortName) {
+    const pf = input.profile;
+    const cs = input.case;
+    const ins = {};
+    if (pf && (pf.identity || pf.area || pf.years || pf.features)) {
+      const years = trimEnd(pf.years).replace(/年$/, '');
+      let t = `🙋 先介绍一下：我是${trimEnd(pf.identity) || '一名从业者'}`;
+      if (years) t += `，在${trimEnd(pf.area) || '洛杉矶'}做了 ${years} 年`;
+      else if (pf.area) t += `，主要服务${trimEnd(pf.area)}`;
+      if (pf.features) t += `，${trimEnd(pf.features)}`;
+      ins.intro = t + '。';
+    }
+    if (pf && pf.ending) ins.ending = String(pf.ending).trim();
+    if (ins.intro) {
+      // 带入了从业者档案：开头和体验类总结换成“从业者”口吻，避免和“自家装修”的口吻冲突
+      ins.opener = PRO_OPENERS[tone] || PRO_OPENERS.ganhuo;
+      if (tone === 'tiyan') ins.summary = '以上是我们的真实案例和经验，每家情况不同，欢迎带着你的问题来评论区交流🙋';
+    }
+    if (cs && (cs.problem || cs.solution || cs.result)) {
+      const label = { bikeng: '真实案例（踩坑复盘）', ganhuo: '举个真实案例', zhongcao: '真实案例分享', tiyan: '我们的真实案例' }[tone] || '真实案例';
+      let t = `📍 ${label}：`;
+      const where = [trimEnd(cs.time), cs.city ? '在' + trimEnd(cs.city) : ''].filter(Boolean).join('，');
+      if (where) t += where + '，';
+      if (cs.client) t += `客户是${trimEnd(cs.client)}。`;
+      if (cs.problem) t += `遇到的问题：${trimEnd(cs.problem)}。`;
+      if (cs.solution) t += `我们的做法：${trimEnd(cs.solution)}。`;
+      if (cs.cost) t += `费用：${trimEnd(cs.cost)}。`;
+      if (cs.result) t += `结果：${trimEnd(cs.result)}。`;
+      if (cs.note) t += trimEnd(cs.note) + '。';
+      ins.casePara = t.replace(/，。/g, '。');
+      const city = trimEnd(cs.city);
+      ins.caseTitles = [
+        city && `${city}${shortName}真实案例📍`,
+        city && `${shortName}案例｜${city}`,
+        cs.client && `真实案例：${trimEnd(cs.client)}`,
+        `${shortName}真实案例复盘📝`,
+      ].filter((x) => x && len(x) <= 20);
+      if (city) ins.cityTag = city;
+    }
+    return ins;
+  }
+  function withCaseTitle(titles, ins) {
+    if (!ins.caseTitles || !ins.caseTitles.length) return titles;
+    const t = ins.caseTitles[0];
+    return titles.includes(t) ? titles : [titles[0], titles[1], t].filter(Boolean);
+  }
+  const withEnding = (cta, ins) => (ins.ending ? `${cta}\n${ins.ending}` : cta);
+  function withCityTag(tags, ins) {
+    if (!ins.cityTag) return tags;
+    const t = '#' + cleanTag(ins.cityTag);
+    return tags.includes(t) ? tags : [...tags.slice(0, 9), t];
   }
 
   /**
@@ -403,19 +470,28 @@
     return generateGeneral(input);
   }
 
-  /** 批量生成，尽量让每篇的标题不重复 */
-  function generateBatch(input, count) {
+  /**
+   * 批量生成，尽量让每篇的标题不重复
+   * @param lib 可选 { profile, cases: [] }：每篇带入同一档案，案例按顺序轮流带入
+   */
+  function generateBatch(input, count, lib) {
     const posts = [];
     const usedTitles = new Set();
+    const cases = (lib && lib.cases) || [];
     for (let i = 0; i < count; i++) {
-      let post = generateOne(input);
+      const one = { ...input, profile: lib && lib.profile, case: cases.length ? cases[i % cases.length] : null };
+      let post = generateOne(one);
       for (let tries = 0; tries < 6 && post.titles.some((t) => usedTitles.has(t)); tries++) {
-        post = generateOne(input);
+        post = generateOne(one);
       }
       post.titles.forEach((t) => usedTitles.add(t));
+      if (one.case) { post.caseId = one.case.id; post.caseLabel = caseLabel(one.case); }
       posts.push(post);
     }
     return posts;
+  }
+  function caseLabel(c) {
+    return [trimEnd(c.time), trimEnd(c.city), trimEnd(c.client) || trimEnd(c.problem).slice(0, 12)].filter(Boolean).join(' · ');
   }
 
   /** 旧历史记录没有封面大字时，用标题兜底 */
@@ -425,5 +501,5 @@
     return [{ main: Array.from(clean).slice(0, 10).join(''), sub: Array.from((post.titles && post.titles[1]) || '').slice(0, 14).join('') }];
   }
 
-  window.XHSTemplates = { generateOne, generateBatch, coverFallback, textLength: len };
+  window.XHSTemplates = { generateOne, generateBatch, coverFallback, caseLabel, libInserts, textLength: len };
 })();
