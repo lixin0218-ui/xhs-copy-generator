@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#ff2442" />
+  <title>小红书文案批量生成器</title>
+  <meta name="description" content="输入主题、人群和关键词，一键批量生成小红书爆款标题、正文、互动引导和话题标签。支持 Claude AI 模式与免 Key 模板模式。" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%23ff2442'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'>红</text></svg>" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">红</span>
+      <div>
+        <h1>小红书文案批量生成器</h1>
+        <p class="sub">标题 · 正文 · 互动引导 · 话题标签，一次生成多篇</p>
+      </div>
+    </div>
+    <nav class="top-actions">
+      <button class="btn ghost" id="btnHistory" type="button">🕘 历史</button>
+      <button class="btn ghost" id="btnSettings" type="button">⚙️ 设置</button>
+    </nav>
+  </header>
+
+  <main class="layout">
+    <!-- 输入区 -->
+    <section class="card input-card" aria-labelledby="inputTitle">
+      <h2 id="inputTitle">📝 填写需求</h2>
+      <form id="genForm" autocomplete="off">
+        <label class="field">
+          <span>主题 / 产品 <em>*</em></span>
+          <input id="topic" type="text" maxlength="60" required placeholder="如：潜水面镜怎么选、衣帽间铝制侧拉门" />
+        </label>
+
+        <label class="field">
+          <span>目标人群</span>
+          <input id="audience" type="text" maxlength="40" placeholder="如：潜水新手、装修中的年轻夫妻" />
+        </label>
+
+        <div class="field">
+          <span>关键词（回车或逗号添加，可多个）</span>
+          <div class="tag-input" id="kwBox">
+            <div class="chips" id="kwChips"></div>
+            <input id="kwInput" type="text" maxlength="20" placeholder="如：防雾、贴合度、近视" />
+          </div>
+        </div>
+
+        <div class="field">
+          <span>语气风格</span>
+          <div class="seg" id="toneSeg" role="radiogroup">
+            <label><input type="radio" name="tone" value="ganhuo" checked /><span>📚 干货科普</span></label>
+            <label><input type="radio" name="tone" value="zhongcao" /><span>💖 种草分享</span></label>
+            <label><input type="radio" name="tone" value="bikeng" /><span>⚠️ 避坑提醒</span></label>
+            <label><input type="radio" name="tone" value="tiyan" /><span>🙋 真实体验</span></label>
+          </div>
+        </div>
+
+        <div class="field">
+          <span>生成数量：<b id="countVal">5</b> 篇</span>
+          <div class="count-row">
+            <input id="count" type="range" min="1" max="20" value="5" />
+            <input id="countNum" type="number" min="1" max="20" value="5" aria-label="生成数量" />
+          </div>
+        </div>
+
+        <div class="field">
+          <span>生成模式</span>
+          <div class="seg mode-seg" id="modeSeg" role="radiogroup">
+            <label><input type="radio" name="mode" value="template" checked /><span>🧩 模板模式<small>免费 · 无需 Key</small></span></label>
+            <label><input type="radio" name="mode" value="ai" /><span>✨ AI 模式<small>Claude · 需 API Key</small></span></label>
+          </div>
+          <p class="hint" id="modeHint"></p>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn primary big" id="btnGenerate" type="submit">🚀 开始生成</button>
+          <button class="btn ghost" id="btnStop" type="button" hidden>⏹ 停止</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- 输出区 -->
+    <section class="card output-card" aria-labelledby="outputTitle">
+      <div class="output-head">
+        <h2 id="outputTitle">📄 生成结果 <small id="resultMeta"></small></h2>
+        <div class="export-actions">
+          <button class="btn ghost sm" id="btnCopyAll" type="button" disabled>📋 复制全部</button>
+          <button class="btn ghost sm" id="btnCsv" type="button" disabled>⬇️ CSV</button>
+          <button class="btn ghost sm" id="btnTxt" type="button" disabled>⬇️ TXT</button>
+        </div>
+      </div>
+
+      <div class="progress" id="progress" hidden>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <p class="progress-text" id="progressText"></p>
+      </div>
+
+      <div id="results" class="results">
+        <div class="empty">
+          <div class="empty-icon">🍠</div>
+          <p>填写左侧需求，点击「开始生成」</p>
+          <p class="muted">没有 API Key 也能用模板模式先试试～</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    纯前端小工具 · 所有数据仅保存在你自己的浏览器中 ·
+    <a href="https://github.com/lixin0218-ui/xhs-copy-generator" target="_blank" rel="noopener">GitHub</a>
+  </footer>
+
+  <!-- 设置弹窗 -->
+  <dialog id="settingsDlg" class="dlg">
+    <form method="dialog" class="dlg-inner" id="settingsForm">
+      <div class="dlg-head">
+        <h3>⚙️ AI 设置</h3>
+        <button class="icon-btn" value="cancel" aria-label="关闭">✕</button>
+      </div>
+
+      <div class="privacy">
+        🔒 <b>隐私说明：</b>你的 API Key <b>只保存在当前浏览器的 localStorage 里</b>，
+        生成时由浏览器<b>直接</b>发送到 Anthropic 官方接口（api.anthropic.com），
+        <b>不会上传到本站或任何第三方服务器</b>。本工具没有后端。
+        在公共电脑上使用后，请点击「清除 Key」。
+      </div>
+
+      <label class="field">
+        <span>Anthropic API Key</span>
+        <div class="key-row">
+          <input id="apiKey" type="password" placeholder="sk-ant-..." autocomplete="off" spellcheck="false" />
+          <button class="btn ghost sm" type="button" id="btnToggleKey">显示</button>
+        </div>
+        <small class="hint">还没有？到 <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> 申请，详见 README。</small>
+      </label>
+
+      <label class="field">
+        <span>模型</span>
+        <select id="model">
+          <option value="claude-opus-5-5">Claude Opus 5.5（默认，质量最好）</option>
+          <option value="claude-sonnet-5-5">Claude Sonnet 5.5（更快更省）</option>
+          <option value="claude-haiku-5-5">Claude Haiku 5.5（最快最便宜）</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>并发数（同时生成几篇）</span>
+        <select id="concurrency">
+          <option value="1">1（最稳，适合新账号）</option>
+          <option value="2" selected>2（推荐）</option>
+          <option value="3">3</option>
+          <option value="4">4（速度快，易触发限流）</option>
+        </select>
+      </label>
+
+      <div class="dlg-actions">
+        <button class="btn ghost" type="button" id="btnClearKey">清除 Key</button>
+        <button class="btn ghost" type="button" id="btnTestKey">测试连接</button>
+        <button class="btn primary" type="button" id="btnSaveSettings">保存</button>
+      </div>
+      <p class="hint" id="settingsMsg"></p>
+    </form>
+  </dialog>
+
+  <!-- 历史弹窗 -->
+  <dialog id="historyDlg" class="dlg wide">
+    <div class="dlg-inner">
+      <div class="dlg-head">
+        <h3>🕘 历史记录</h3>
+        <div>
+          <button class="btn ghost sm" type="button" id="btnClearHistory">清空全部</button>
+          <button class="icon-btn" type="button" id="btnCloseHistory" aria-label="关闭">✕</button>
+        </div>
+      </div>
+      <div id="historyList" class="history-list"></div>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="templates.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
