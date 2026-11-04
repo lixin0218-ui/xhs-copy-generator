@@ -286,3 +286,62 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .two-col { grid-template-columns: 1fr; }
   .cover-thumb { width: 88px; }
 }
+
+/* ---------- v3：分区导航 ---------- */
+.tabs {
+  display: flex; gap: 4px; max-width: 1240px; margin: 0 auto; padding: 12px 20px 0;
+}
+.tab {
+  display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; cursor: pointer;
+  padding: 8px 16px; border-radius: 999px; font-size: 15px; color: #555;
+}
+.tab span { font-size: 16px; }
+.tab.active { background: var(--red); color: #fff; font-weight: 600; }
+.tab:not(.active):hover { background: var(--red-soft); color: var(--red-dark); }
+.panel[hidden] { display: none !important; }
+.tools-panel, .page-panel { max-width: 1240px; margin: 0 auto; padding: 20px; display: grid; gap: 16px; }
+.subtabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.subtab { border: 1px solid #e3e3e3; background: #fff; border-radius: 999px; padding: 7px 14px; cursor: pointer; font-size: 14px; }
+.subtab.active { border-color: var(--red); background: var(--red-soft); color: var(--red-dark); font-weight: 600; }
+.tool[hidden] { display: none !important; }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+
+/* ---------- v3：违禁词 ---------- */
+mark.vio, .vio { border-radius: 3px; padding: 0 1px; }
+.vio-high { background: #ffd3da; color: #b8001c; box-shadow: inset 0 -2px 0 #ff2442; }
+.vio-medium { background: #ffe8c2; color: #8a4b00; box-shadow: inset 0 -2px 0 #ff9f1a; }
+.badge { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 999px; margin-left: 6px; font-weight: 600; vertical-align: middle; }
+.badge.ok { background: #e7f6ec; color: #1f7a3a; }
+.badge.warn { background: #ffe3e7; color: #c4001f; }
+.chk-result { margin-top: 14px; }
+.chk-preview { white-space: pre-wrap; word-break: break-word; background: #fafafa; border-radius: 10px; padding: 12px; margin-bottom: 12px; font-size: 15px; }
+.chk-ok { color: #1f7a3a; font-weight: 600; margin: 6px 0; }
+.chk-summary { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 10px; }
+.chk-summary .red { color: var(--red); }
+.chk-cat { margin-bottom: 10px; }
+.chk-cat-name { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+.chk-cat-name small { font-weight: 400; color: var(--muted); font-size: 12px; }
+.chk-item { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 0; font-size: 14px; }
+.chk-word { font-weight: 700; }
+.chk-count { color: var(--muted); font-size: 12px; }
+.chk-alts { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.chk-rep { border: 1px solid #e3e3e3; background: #fff; border-radius: 999px; padding: 2px 10px; cursor: pointer; font-size: 13px; }
+.chk-rep:hover { border-color: var(--red); color: var(--red); }
+.compliance { margin-top: 12px; border: 1px solid var(--red-line); border-radius: 10px; padding: 0 12px; background: #fffafa; }
+.compliance.ok { border-color: #cfe9d6; background: #f6fbf7; }
+.compliance summary { cursor: pointer; padding: 10px 0; font-weight: 600; font-size: 14px; list-style: none; }
+.compliance summary::-webkit-details-marker { display: none; }
+
+@media (max-width: 900px) {
+  body { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  .tabs {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; max-width: none; margin: 0;
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); background: #fff; border-top: 1px solid var(--line);
+    justify-content: space-around; gap: 0;
+  }
+  .tab { flex-direction: column; gap: 2px; font-size: 11px; padding: 4px 6px; border-radius: 10px; flex: 1; }
+  .tab span { font-size: 20px; }
+  .tab.active { background: none; color: var(--red); }
+  .tools-panel, .page-panel { padding: 12px; gap: 12px; }
+  .toast { bottom: calc(80px + env(safe-area-inset-bottom)); }
+}

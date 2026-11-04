@@ -379,11 +379,12 @@
 
   function systemPromptFor(input) {
     const { ind, sub } = industryOf(input);
-    if (!ind.ai) return SYSTEM_PROMPT;
+    const base = SYSTEM_PROMPT + '\n\n【违禁词与限流词】\n' + CHK.promptHint();
+    if (!ind.ai) return base;
     let extra = `\n\n【行业背景与专业要求】\n${ind.ai}`;
     if (sub) extra += `\n本篇细分方向：${sub.name}。可参考的专业词汇：${sub.terms.join('、')}。`;
     else extra += `\n细分方向不限，可从这些方向中选最贴合主题的：${ind.subs.map((x) => x.name).join('、')}。批量生成时各篇尽量覆盖不同方向。`;
-    return SYSTEM_PROMPT + extra;
+    return base + extra;
   }
 
   function buildUserPrompt(input, index, total) {
@@ -522,18 +523,64 @@
     </details>`;
   }
 
+  // ---------- 违禁词 / 限流词检测 ----------
+  const CHK = window.XHSChecker;
+  const hl = (t) => CHK.highlight(t, esc);
+  function postTexts(p) {
+    return [...p.titles, p.body, p.cta, ...p.tags, ...coversOf(p).flatMap((c) => [c.main, c.sub])];
+  }
+  function complianceBadge(p) {
+    const sum = CHK.summarize(postTexts(p));
+    return sum.total
+      ? `<span class="badge warn">⚠️ ${sum.total} 处违禁/限流词</span>`
+      : '<span class="badge ok">✅ 合规</span>';
+  }
+  function complianceHTML(p, i) {
+    const sum = CHK.summarize(postTexts(p));
+    return `<details class="compliance ${sum.total ? '' : 'ok'}" ${sum.total ? 'open' : ''}>
+      <summary>🛡 合规检测${sum.total ? `：发现 ${sum.total} 处` : '：通过'}</summary>
+      ${CHK.reportHTML(sum, esc, 'post:' + i)}
+    </details>`;
+  }
+  /** 对一篇文案的所有字段做替换（fn 接收原文本，返回新文本） */
+  function transformPost(p, fn) {
+    p.titles = p.titles.map(fn).map((t) => t.trim()).filter(Boolean);
+    p.body = fn(p.body);
+    p.cta = fn(p.cta || '');
+    p.tags = p.tags.map((t) => fn(t)).map((t) => t.replace(/^#?/, '#')).filter((t) => t.length > 1);
+    if (p.covers) p.covers = p.covers.map((c) => ({ main: fn(c.main), sub: fn(c.sub) }));
+  }
+  function applyFix(i, id, text, alt) {
+    const p = current.posts[i];
+    if (!p) return;
+    if (id === '*') transformPost(p, CHK.replaceAll);
+    else transformPost(p, (t) => CHK.replaceIn(t, id, text, alt));
+    renderOne(i);
+    persistCurrent();
+    toast('✅ 已替换');
+  }
+  /** 当前批次如果已在历史记录里，原位更新 */
+  function persistCurrent() {
+    if (!current) return;
+    const list = loadHistory();
+    const idx = list.findIndex((h) => h.id === current.id);
+    if (idx < 0) return;
+    list[idx] = { ...list[idx], ...current, posts: current.posts.filter((p) => p && !p.error) };
+    store.set(LS.history, JSON.stringify(list));
+  }
+
   function postHTML(p, i) {
     if (!p) return `<article class="post pending" data-i="${i}">⏳ 第 ${i + 1} 篇生成中…</article>`;
     if (p.error) return `<article class="post error" data-i="${i}"><div class="post-head"><span class="post-no">#${i + 1}</span></div>❌ ${esc(p.error)}</article>`;
     const titles = p.titles.map((t) => {
       const n = textLen(t);
-      return `<li><span>${esc(t)}</span><span><span class="len ${n > 20 ? 'over' : ''}">${n}字</span><button class="mini-copy" type="button" data-copy-title="${esc(t)}">复制</button></span></li>`;
+      return `<li><span>${hl(t)}</span><span><span class="len ${n > 20 ? 'over' : ''}">${n}字</span><button class="mini-copy" type="button" data-copy-title="${esc(t)}">复制</button></span></li>`;
     }).join('');
     let thumb = '';
     try { thumb = coverThumb(p, i); } catch { /* 极少数浏览器不支持 canvas，忽略 */ }
     return `<article class="post" data-i="${i}">
       <div class="post-head">
-        <span class="post-no">#${i + 1}${p.sub ? ` <small class="muted">${esc(p.sub)}</small>` : ''}</span>
+        <span class="post-no">#${i + 1}${p.sub ? ` <small class="muted">${esc(p.sub)}</small>` : ''}${complianceBadge(p)}</span>
         <div class="post-tools">
           <button class="btn ghost sm" type="button" data-act="copy-body" data-i="${i}">复制正文+标签</button>
           <button class="btn primary sm" type="button" data-act="copy" data-i="${i}">📋 一键复制</button>
@@ -542,10 +589,11 @@
       <div class="label">备选标题</div>
       <ul class="titles">${titles}</ul>
       <div class="label">正文</div>
-      <div class="body">${esc(p.body)}</div>
-      ${p.cta ? `<div class="label">互动引导</div><div class="cta">${esc(p.cta)}</div>` : ''}
+      <div class="body">${hl(p.body)}</div>
+      ${p.cta ? `<div class="label">互动引导</div><div class="cta">${hl(p.cta)}</div>` : ''}
       <div class="label">话题标签</div>
-      <div class="tags">${p.tags.map((t) => `<span>${esc(t)}</span>`).join('')}</div>
+      <div class="tags">${p.tags.map((t) => `<span>${hl(t)}</span>`).join('')}</div>
+      ${complianceHTML(p, i)}
       <div class="label">封面</div>
       <div class="cover-row">
         <button class="cover-thumb" type="button" data-act="cover" data-i="${i}" aria-label="编辑第 ${i + 1} 篇封面">${thumb ? `<img src="${thumb}" alt="封面预览" />` : '🎨'}</button>
@@ -578,6 +626,13 @@
   }
 
   el.results.addEventListener('click', (e) => {
+    const rb = e.target.closest('.chk-rep, .chk-rep-all');
+    if (rb && current) {
+      const i = Number(String(rb.dataset.scope).split(':')[1]);
+      if (rb.classList.contains('chk-rep-all')) applyFix(i, '*');
+      else applyFix(i, rb.dataset.repId, rb.dataset.repText, rb.dataset.repAlt);
+      return;
+    }
     const t = e.target.closest('[data-copy-title]');
     if (t) { copyText(t.dataset.copyTitle); return; }
     const b = e.target.closest('button[data-act]');
@@ -717,12 +772,17 @@
     el.btnStop.hidden = !busy;
   }
 
-  el.form.addEventListener('submit', async (e) => {
+  el.form.addEventListener('submit', (e) => {
     e.preventDefault();
     const input = readInput();
     if (!input.topic) { toast('请先填写主题/产品'); el.topic.focus(); return; }
+    runGenerate(input, getMode());
+  });
+
+  /** 按给定输入生成（表单提交、内容日历等都走这里） */
+  async function runGenerate(input, mode) {
+    if (abortCtrl) { toast('正在生成中，请稍候或先停止'); return; }
     store.set(LS.lastInput, JSON.stringify(input));
-    const mode = getMode();
 
     if (mode === 'ai' && !store.get(LS.key)) {
       toast('AI 模式需要先填写 API Key');
@@ -795,7 +855,7 @@
       toast(ok ? `✅ 生成完成：${ok} 篇` : '❌ 生成失败，请查看错误信息', 2500);
     }
     if (batch.posts.some((p) => !p.error)) saveHistory(batch);
-  });
+  }
 
   el.btnStop.addEventListener('click', () => {
     if (abortCtrl) { abortCtrl.abort(); toast('已停止生成'); }
@@ -918,6 +978,35 @@
     if (tone) tone.checked = true;
     setCount(input.count || 5);
   }
+
+  // ================= 分区导航 =================
+  function showTab(name) {
+    document.querySelectorAll('#tabs .tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
+    document.querySelectorAll('.panel[data-panel]').forEach((p) => { p.hidden = p.dataset.panel !== name; });
+    document.dispatchEvent(new CustomEvent('xhs:tab', { detail: name }));
+    window.scrollTo({ top: 0 });
+  }
+  document.addEventListener('xhs:rerender', () => { if (current) renderResults(); });
+  $('tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) showTab(b.dataset.tab); });
+
+  /** 把一批（单篇或多篇）结果放到“生成”页显示并存入历史 */
+  function showBatch(batch, { save = true } = {}) {
+    current = batch;
+    showTab('gen');
+    el.progress.hidden = true;
+    renderResults();
+    if (save) saveHistory(batch);
+    scrollToResults();
+  }
+
+  // 供其他模块（工具、资料库、日历、数据）使用
+  window.XHS = {
+    store, LS, esc, toast, copyText, download, fmtTime, csvCell, textLen,
+    INDUSTRIES, TONE_NAMES, getMode, callClaude, ApiError, sleep, MODEL_NAMES,
+    hasKey: () => !!store.get(LS.key), openSettings, showTab, showBatch, runGenerate, fillForm,
+    loadHistory, saveHistory, persistCurrent, getCurrent: () => current,
+    postToText, postCopyText, coversOf,
+  };
 
   // ================= 初始化 =================
   updateSubs();

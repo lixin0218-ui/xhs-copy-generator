@@ -24,7 +24,12 @@
     </nav>
   </header>
 
-  <main class="layout">
+  <nav class="tabs" id="tabs" aria-label="功能分区">
+    <button type="button" class="tab active" data-tab="gen"><span>✍️</span>生成</button>
+    <button type="button" class="tab" data-tab="tools"><span>🛠</span>工具</button>
+  </nav>
+
+  <main class="layout panel" data-panel="gen">
     <!-- 输入区 -->
     <section class="card input-card" aria-labelledby="inputTitle">
       <h2 id="inputTitle">📝 填写需求</h2>
@@ -116,6 +121,35 @@
           <p class="muted">没有 API Key 也能用模板模式先试试～</p>
         </div>
       </div>
+    </section>
+  </main>
+
+  <!-- ============ 工具 ============ -->
+  <main class="panel tools-panel" data-panel="tools" hidden>
+    <div class="subtabs" id="toolTabs">
+      <button type="button" class="subtab active" data-tool="check">🛡 违禁词检测</button>
+    </div>
+
+    <section class="card tool" data-toolpanel="check">
+      <h2>🛡 违禁词 / 限流词检测</h2>
+      <p class="hint">粘贴任意文案（笔记正文、标题、评论回复、海报文字…），检测广告法极限词、夸大功效、导流词、价格诱导，并给出合规替换建议。</p>
+      <label class="field">
+        <span>要检测的文案</span>
+        <textarea id="chkInput" rows="9" placeholder="把文案粘贴到这里…"></textarea>
+      </label>
+      <div class="opt-row">
+        <button type="button" class="btn primary" id="btnChk">🔍 开始检测</button>
+        <button type="button" class="btn ghost" id="btnChkCopy">📋 复制文案</button>
+        <button type="button" class="btn ghost" id="btnChkClear">清空</button>
+      </div>
+      <div id="chkResult" class="chk-result"></div>
+      <details class="extras" id="customWordsBox">
+        <summary>✏️ 自定义词库（只保存在本机浏览器）</summary>
+        <p class="hint">每行一个词，可用“=”写替换建议，多个建议用“/”分隔。例如：<code>秒杀=优惠/活动价</code>、<code>包安装</code>。保存后对所有文案生效。</p>
+        <textarea id="customWords" rows="5" placeholder="秒杀=优惠/活动价"></textarea>
+        <div class="opt-row" style="margin:8px 0 12px"><button type="button" class="btn ghost sm" id="btnSaveCustom">保存自定义词</button></div>
+        <p class="hint">完整词库在项目文件 <code>banned-words.js</code> 里，可以直接编辑。</p>
+      </details>
     </section>
   </main>
 
@@ -250,9 +284,12 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <script src="banned-words.js"></script>
+  <script src="checker.js"></script>
   <script src="industries.js"></script>
   <script src="templates.js"></script>
   <script src="cover.js"></script>
   <script src="app.js"></script>
+  <script src="tools.js"></script>
 </body>
 </html>
