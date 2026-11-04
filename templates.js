@@ -349,7 +349,13 @@
   function generateIndustry(input, ind) {
     const tone = ind.titles[input.tone] ? input.tone : 'ganhuo';
     // 细分不限时，如果带入的案例属于本行业某个细分，就按案例的细分来写
-    const subId = input.sub || (input.case && input.case.industry === input.industry ? input.case.sub : '');
+    let subId = input.sub || (input.case && input.case.industry === input.industry ? input.case.sub : '');
+    // 还是不限时，看主题里有没有点名某个细分（如“衣帽间门”“车库门”“ADU”）
+    if (!subId) {
+      const topic = String(input.topic || '');
+      const hit = ind.subs.find((x) => [x.short, ...x.name.split('/')].some((n) => n && topic.includes(n)));
+      if (hit) subId = hit.id;
+    }
     const sub = (subId && ind.subs.find((s) => s.id === subId)) || pick(ind.subs);
     const userKws = (input.keywords || []).map((k) => k.trim()).filter(Boolean);
     const shortTerms = sub.terms.filter((t) => len(t) <= 6);

@@ -451,3 +451,9 @@ mark.vio, .vio { border-radius: 3px; padding: 0 1px; }
   .stat-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .pub-fields { grid-template-columns: 1fr 1fr; }
 }
+
+@media (max-width: 600px) {
+  .post-head { flex-wrap: wrap; }
+  .post-tools { width: 100%; }
+  .post-tools .btn { flex: 1 1 auto; }
+}
