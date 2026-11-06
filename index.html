@@ -29,9 +29,19 @@
     <section class="card input-card" aria-labelledby="inputTitle">
       <h2 id="inputTitle">📝 填写需求</h2>
       <form id="genForm" autocomplete="off">
+        <div class="field">
+          <span>账号人设</span>
+          <div class="seg three" id="presetSeg" role="radiogroup">
+            <label><input type="radio" name="preset" value="general" checked /><span>🍠 通用</span></label>
+            <label><input type="radio" name="preset" value="doors" /><span>🚪 选门新号</span></label>
+            <label><input type="radio" name="preset" value="diving" /><span>🤿 潜水老号</span></label>
+          </div>
+          <p class="hint" id="presetHint"></p>
+        </div>
+
         <label class="field">
           <span>主题 / 产品 <em>*</em></span>
-          <input id="topic" type="text" maxlength="60" required placeholder="如：潜水面镜怎么选、衣帽间铝制侧拉门" />
+          <input id="topic" type="text" maxlength="60" required placeholder="如：潜水面镜怎么选、入户门怎么选" />
         </label>
 
         <label class="field">
@@ -89,6 +99,8 @@
           <button class="btn ghost sm" id="btnCopyAll" type="button" disabled>📋 复制全部</button>
           <button class="btn ghost sm" id="btnCsv" type="button" disabled>⬇️ CSV</button>
           <button class="btn ghost sm" id="btnTxt" type="button" disabled>⬇️ TXT</button>
+          <button class="btn ghost sm" id="btnJson" type="button" disabled>⬇️ JSON</button>
+          <button class="btn ghost sm" id="btnImport" type="button">⬆️ 导入</button>
         </div>
       </div>
 
@@ -178,8 +190,27 @@
     </div>
   </dialog>
 
+  <!-- 导入弹窗：把 Claude 对话里生成的 JSON 粘贴进来，不需要 API Key -->
+  <dialog id="importDlg" class="dlg wide">
+    <div class="dlg-inner">
+      <div class="dlg-head">
+        <h3>⬆️ 导入笔记</h3>
+        <button class="icon-btn" type="button" id="btnCloseImport" aria-label="关闭">✕</button>
+      </div>
+      <p class="hint" style="margin-top:0">在 Claude 对话里让「小红书内容助手」输出 JSON，把整段粘贴到下面，或者选择 .json 文件。不调用 API，不需要 Key。</p>
+      <textarea id="importText" rows="10" placeholder='[{"title":"…","body":"…","hashtags":["#…"]}]'></textarea>
+      <div class="dlg-actions">
+        <label class="btn ghost" for="importFile">选择文件</label>
+        <input id="importFile" type="file" accept=".json,application/json,text/plain" hidden />
+        <button class="btn primary" type="button" id="btnDoImport">导入</button>
+      </div>
+      <p class="hint" id="importMsg"></p>
+    </div>
+  </dialog>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <script src="presets.js"></script>
   <script src="templates.js"></script>
   <script src="app.js"></script>
 </body>
